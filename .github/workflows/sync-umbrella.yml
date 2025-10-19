@@ -1,0 +1,35 @@
+name: Sync Umbrella Pointer
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  update-umbrella:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout umbrella repo
+        uses: actions/checkout@v4
+        with:
+          repository: a3emond/stickyboard
+          token: ${{ secrets.UMBRELLA_PUSH_TOKEN }}
+          fetch-depth: 0
+
+      - name: Initialize submodules
+        run: |
+          git submodule update --init --recursive
+
+      - name: Update submodule reference
+        run: |
+          git submodule set-branch --branch main ${{ github.event.repository.name }}
+          git submodule update --remote ${{ github.event.repository.name }}
+          git add ${{ github.event.repository.name }}
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git commit -m "Auto-sync ${{ github.event.repository.name }} to latest commit" || echo "No changes"
+
+      - name: Push changes to umbrella
+        run: |
+          git push origin master
