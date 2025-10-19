@@ -1,0 +1,33 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "DB_HOST": "localhost",
+        "POSTGRES_USER": "stickyadmin",
+        "POSTGRES_PASSWORD": "strongpassword",
+        "POSTGRES_DB": "stickyboard",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://+:8080"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:8080",
+      "environmentVariables": {
+        "DB_HOST": "localhost",
+        "POSTGRES_USER": "stickyadmin",
+        "POSTGRES_PASSWORD": "strongpassword",
+        "POSTGRES_DB": "stickyboard",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://+:8080"
+      }
+    }
+  }
+}

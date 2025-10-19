@@ -1,0 +1,134 @@
+# ========================================
+# StickyBoard API .gitignore
+# Target: .NET 9 + Docker + PostgreSQL
+# ========================================
+
+# OS / Editor
+############################
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# User-specific files
+############################
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+############################
+bin/
+obj/
+out/
+artifacts/
+Debug/
+Release/
+publish/
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.log
+
+# Generated files
+############################
+*.generated.*
+*.g.*
+*.g.cs
+*.g.i.cs
+
+# VS / JetBrains Rider
+############################
+*.suo
+*.userprefs
+*.ncb
+*.opensdf
+*.sdf
+*.cache
+*.dbmdl
+*.dbproj.schemaview
+*.tlog
+*.vssscc
+*.vspscc
+*.vsp
+*.vspx
+*.vsmdi
+*.vsidx
+.vs/
+_ReSharper*/
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# Local configs
+############################
+.env
+appsettings.Development.json
+#launchSettings.json
+
+# Logs and temp files
+############################
+logs/
+*.log
+*.tmp
+*.bak
+*.old
+*.seed
+
+# Docker / Compose
+############################
+**/Dockerfile.*
+**/docker-compose.override.yml
+**/.docker/
+**/docker-data/
+**/docker-volume/
+**/tmp/
+*.pid
+
+# Database
+############################
+**/db/data/
+**/pgdata/
+**/postgres-data/
+*.db
+*.sqlite
+*.sql-shm
+*.sql-wal
+
+# Node / Frontend placeholders
+############################
+node_modules/
+dist/
+build/
+.npm/
+.cache/
+coverage/
+
+# JetBrains Rider internal
+############################
+.idea/
+.idea_modules/
+*.iml
+*.iws
+.idea/.idea.Workspace.xml
+
+# Misc
+############################
+*.bak
+*.orig
+*.rej
+*.tar
+*.zip
+*.gz
+*.7z
+*.rar
+
+# Keep these for versioning
+############################
+!docker-compose.yml
+!Dockerfile
+!db/init/**
+!README.md
+!*.sql

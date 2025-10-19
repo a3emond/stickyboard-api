@@ -1,0 +1,1 @@
+This is the root path of apache2 server setup for stickyboard.aedev.pro
