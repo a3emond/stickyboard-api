@@ -1,6 +1,6 @@
-@StickyBoard.Api_HostAddress = http://localhost:5031
-
-GET {{StickyBoard.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+#@StickyBoard.Api_HostAddress = http://localhost:5031
+#
+#GET {{StickyBoard.Api_HostAddress}}/weatherforecast/
+#Accept: application/json
 
 ###
