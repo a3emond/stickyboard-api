@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);

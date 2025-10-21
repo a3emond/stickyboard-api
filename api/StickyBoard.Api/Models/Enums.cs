@@ -22,4 +22,8 @@ namespace StickyBoard.Api.Models
     public enum ActivityType { card_created, card_updated, card_moved, comment_added, status_changed, assignee_changed, link_added, link_removed, rule_triggered }
     public enum EntityType { user, board, section, tab, card, link, cluster, rule, file }
 
+    // Worker Queue Related
+    public enum JobKind { RuleExecutor, ClusterRebuilder, SearchIndexer, SyncCompactor, NotificationDispatcher, AnalyticsExporter, Generic }
+    public enum JobStatus { queued, running, succeeded, failed, canceled, dead }
+
 }
