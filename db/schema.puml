@@ -1,0 +1,393 @@
+@startuml StickyBoard-ERD
+' StickyBoard – PostgreSQL Schema with Worker Queue (2025-10-20)
+' ==============================================================
+skinparam class {
+  BackgroundColor White
+  ArrowColor #555
+  BorderColor #777
+}
+skinparam shadowing false
+hide circle
+
+' =============================
+' Enumerations (Postgres ENUMs)
+' =============================
+
+enum user_role {
+  user
+  admin
+  moderator
+}
+
+enum board_visibility {
+  private
+  shared
+  public
+}
+
+enum board_role {
+  owner
+  editor
+  commenter
+  viewer
+}
+
+enum tab_scope {
+  board
+  section
+}
+
+enum card_type {
+  note
+  task
+  event
+  drawing
+}
+
+enum card_status {
+  open
+  in_progress
+  blocked
+  done
+  archived
+}
+
+enum link_type {
+  references
+  duplicate_of
+  relates_to
+  blocks
+  depends_on
+}
+
+enum cluster_type {
+  manual
+  rule
+  similarity
+}
+
+enum activity_type {
+  card_created
+  card_updated
+  card_moved
+  comment_added
+  status_changed
+  assignee_changed
+  link_added
+  link_removed
+  rule_triggered
+  board_changed
+  cluster_changed
+  rule_changed
+}
+
+enum entity_type {
+  user
+  board
+  section
+  tab
+  card
+  link
+  cluster
+  rule
+  file
+}
+
+enum job_kind {
+  RuleExecutor
+  ClusterRebuilder
+  SearchIndexer
+  SyncCompactor
+  NotificationDispatcher
+  AnalyticsExporter
+  Generic
+}
+
+enum job_status {
+  queued
+  running
+  succeeded
+  failed
+  canceled
+  dead
+}
+
+' =============================
+' Core Domain Tables
+' =============================
+
+class users <<table>> {
+  +id: uuid {PK}
+  +email: text {NOT NULL, UNIQUE}
+  +display_name: text {NOT NULL}
+  +avatar_uri: text?
+  +prefs: jsonb {NOT NULL, default '{}'}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class auth_users <<table>> {
+  +user_id: uuid {PK, FK -> users.id}
+  +password_hash: text {NOT NULL}
+  +role: user_role {NOT NULL, default 'user'}
+  +last_login: timestamptz?
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class boards <<table>> {
+  +id: uuid {PK}
+  +owner_id: uuid {FK -> users.id}
+  +title: text {NOT NULL}
+  +visibility: board_visibility {default 'private'}
+  +theme: jsonb {default '{}'}
+  +rules: jsonb {default '[]'}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class permissions <<table>> {
+  +user_id: uuid {PK, FK -> users.id}
+  +board_id: uuid {PK, FK -> boards.id}
+  +role: board_role {NOT NULL}
+  +granted_at: timestamptz
+}
+
+class sections <<table>> {
+  +id: uuid {PK}
+  +board_id: uuid {FK -> boards.id}
+  +title: text {NOT NULL}
+  +position: integer
+  +layout_meta: jsonb {default '{}'}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class tabs <<table>> {
+  +id: uuid {PK}
+  +scope: tab_scope
+  +board_id: uuid {FK -> boards.id}
+  +section_id: uuid? {FK -> sections.id}
+  +title: text
+  +tab_type: text {default 'custom'}
+  +layout_config: jsonb {default '{}'}
+  +position: integer
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class cards <<table>> {
+  +id: uuid {PK}
+  +board_id: uuid {FK -> boards.id}
+  +section_id: uuid? {FK -> sections.id}
+  +tab_id: uuid? {FK -> tabs.id}
+  +type: card_type
+  +title: text?
+  +content: jsonb {default '{}'}
+  +ink_data: jsonb?
+  +due_date: timestamptz?
+  +start_time: timestamptz?
+  +end_time: timestamptz?
+  +priority: integer?
+  +status: card_status {default 'open'}
+  +created_by: uuid? {FK -> users.id}
+  +assignee_id: uuid? {FK -> users.id}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+  +version: integer
+  +tsv: tsvector {generated}
+}
+
+class tags <<table>> {
+  +id: uuid {PK}
+  +name: text {UNIQUE}
+}
+
+class card_tags <<table>> {
+  +card_id: uuid {PK, FK -> cards.id}
+  +tag_id: uuid {PK, FK -> tags.id}
+}
+
+class links <<table>> {
+  +id: uuid {PK}
+  +from_card: uuid {FK -> cards.id}
+  +to_card: uuid {FK -> cards.id}
+  +rel_type: link_type
+  +created_at: timestamptz
+  +created_by: uuid? {FK -> users.id}
+}
+
+class clusters <<table>> {
+  +id: uuid {PK}
+  +board_id: uuid {FK -> boards.id}
+  +cluster_type: cluster_type
+  +rule_def: jsonb?
+  +visual_meta: jsonb {default '{}'}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class cluster_members <<table>> {
+  +cluster_id: uuid {PK, FK -> clusters.id}
+  +card_id: uuid {PK, FK -> cards.id}
+}
+
+class activities <<table>> {
+  +id: uuid {PK}
+  +board_id: uuid {FK -> boards.id}
+  +card_id: uuid? {FK -> cards.id}
+  +actor_id: uuid? {FK -> users.id}
+  +act_type: activity_type
+  +payload: jsonb {default '{}'}
+  +created_at: timestamptz
+}
+
+class rules <<table>> {
+  +id: uuid {PK}
+  +board_id: uuid {FK -> boards.id}
+  +definition: jsonb
+  +enabled: boolean {default true}
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class files <<table>> {
+  +id: uuid {PK}
+  +owner_id: uuid {FK -> users.id}
+  +board_id: uuid? {FK -> boards.id}
+  +card_id: uuid? {FK -> cards.id}
+  +storage_key: text
+  +filename: text
+  +mime_type: text?
+  +size_bytes: bigint?
+  +meta: jsonb {default '{}'}
+  +created_at: timestamptz
+}
+
+class operations <<table>> {
+  +id: uuid {PK}
+  +device_id: text
+  +user_id: uuid {FK -> users.id}
+  +entity: entity_type
+  +entity_id: uuid
+  +op_type: text
+  +payload: jsonb
+  +version_prev: integer?
+  +version_next: integer?
+  +created_at: timestamptz
+}
+
+' =============================
+' Worker Queue System
+' =============================
+
+class worker_jobs <<table>> {
+  +id: uuid {PK}
+  +job_kind: job_kind
+  +priority: smallint {default 0}
+  +run_at: timestamptz {default now()}
+  +max_attempts: smallint {default 10}
+  +attempt: integer {default 0}
+  +dedupe_key: text?
+  +payload: jsonb {default '{}'}
+  +status: job_status {default 'queued'}
+  +claimed_by: text?
+  +claimed_at: timestamptz?
+  +last_error: text?
+  +created_at: timestamptz
+  +updated_at: timestamptz
+}
+
+class worker_job_attempts <<table>> {
+  +id: bigserial {PK}
+  +job_id: uuid {FK -> worker_jobs.id}
+  +started_at: timestamptz
+  +finished_at: timestamptz?
+  +ok: boolean?
+  +error: text?
+}
+
+class worker_job_deadletters <<table>> {
+  +id: uuid {PK}
+  +job_id: uuid? {UNIQUE, FK -> worker_jobs.id}
+  +job_kind: job_kind
+  +payload: jsonb
+  +attempts: integer
+  +last_error: text?
+  +dead_at: timestamptz
+}
+
+' =============================
+' Relationships
+' =============================
+
+' Users & Auth
+auth_users "1" -- "1" users : user_id
+
+' Boards
+boards "*" --> "1" users : owner_id
+permissions "*" --> "1" users : user_id
+permissions "*" --> "1" boards : board_id
+sections "*" --> "1" boards : board_id
+tabs "*" --> "1" boards : board_id
+tabs "*" --> "0..1" sections : section_id
+cards "*" --> "1" boards : board_id
+cards "*" --> "0..1" sections : section_id
+cards "*" --> "0..1" tabs : tab_id
+cards "*" --> "0..1" users : created_by
+cards "*" --> "0..1" users : assignee_id
+
+' Tags
+card_tags "*" --> "1" cards : card_id
+card_tags "*" --> "1" tags : tag_id
+
+' Links
+links "*" --> "1" cards : from_card
+links "*" --> "1" cards : to_card
+links "*" --> "0..1" users : created_by
+
+' Clusters
+clusters "*" --> "1" boards : board_id
+cluster_members "*" --> "1" clusters : cluster_id
+cluster_members "*" --> "1" cards : card_id
+
+' Activities
+activities "*" --> "1" boards : board_id
+activities "*" --> "0..1" cards : card_id
+activities "*" --> "0..1" users : actor_id
+
+' Rules
+rules "*" --> "1" boards : board_id
+
+' Files
+files "*" --> "1" users : owner_id
+files "*" --> "0..1" boards : board_id
+files "*" --> "0..1" cards : card_id
+
+' Operations
+operations "*" --> "1" users : user_id
+
+' Worker Queue
+worker_job_attempts "*" --> "1" worker_jobs : job_id
+worker_job_deadletters "0..1" --> "1" worker_jobs : job_id
+
+' =============================
+' Notes (optional)
+' =============================
+
+note right of worker_jobs
+  Handles background processing:
+  - RuleExecutor
+  - ClusterRebuilder
+  - SearchIndexer
+  - NotificationDispatcher
+  - etc.
+  Indexed by (status, run_at, priority)
+end note
+
+note right of activities
+  Trigger: enqueue_jobs_on_activity()
+  Automatically enqueues worker_jobs on insert.
+end note
+
+@enduml
