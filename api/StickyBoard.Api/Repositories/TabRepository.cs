@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class TabRepository : RepositoryBase<Tab>
     {
-        public TabRepository(string connectionString) : base(connectionString) { }
+        public TabRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Tab Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Tab>(reader);

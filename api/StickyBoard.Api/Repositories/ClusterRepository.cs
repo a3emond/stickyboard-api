@@ -7,7 +7,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class ClusterRepository : RepositoryBase<Cluster>
     {
-        public ClusterRepository(string connectionString) : base(connectionString) { }
+        public ClusterRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Cluster Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Cluster>(reader);

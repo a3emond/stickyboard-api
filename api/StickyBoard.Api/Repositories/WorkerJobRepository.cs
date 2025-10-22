@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class WorkerJobRepository : RepositoryBase<WorkerJob>
     {
-        public WorkerJobRepository(string connectionString) : base(connectionString) { }
+        public WorkerJobRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override WorkerJob Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<WorkerJob>(reader);

@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class ActivityRepository : RepositoryBase<Activity>
     {
-        public ActivityRepository(string connectionString) : base(connectionString) { }
+        public ActivityRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Activity Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Activity>(reader);

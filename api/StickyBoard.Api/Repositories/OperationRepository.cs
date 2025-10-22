@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class OperationRepository : RepositoryBase<Operation>
     {
-        public OperationRepository(string connectionString) : base(connectionString) { }
+        public OperationRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Operation Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Operation>(reader);

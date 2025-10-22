@@ -7,41 +7,41 @@ namespace StickyBoard.Api.Repositories.Base
 {
     public abstract class RepositoryBase<T> : IRepository<T> where T : class, IEntity, new()
     {
-        private readonly string _connectionString;
+        private readonly NpgsqlDataSource _dataSource;
 
-        protected RepositoryBase(string connectionString)
+        protected RepositoryBase(NpgsqlDataSource dataSource)
         {
-            _connectionString = connectionString;
+            _dataSource = dataSource;
         }
 
+        // Opens a mapped connection from the data source
         protected async Task<NpgsqlConnection> OpenAsync()
         {
-            var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
+            var conn = await _dataSource.OpenConnectionAsync();
             return conn;
         }
 
         protected string TableName =>
-            typeof(T).GetCustomAttribute<TableAttribute>()?.Name ?? typeof(T).Name.ToLower();
+            typeof(T).GetCustomAttribute<TableAttribute>()?.Name ?? typeof(T).Name.ToLowerInvariant();
 
         protected abstract T Map(NpgsqlDataReader reader);
 
         public virtual async Task<T?> GetByIdAsync(Guid id)
         {
-            using var conn = await OpenAsync();
-            using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName} WHERE id = @id", conn);
+            await using var conn = await OpenAsync();
+            await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName} WHERE id = @id", conn);
             cmd.Parameters.AddWithValue("id", id);
 
-            using var reader = await cmd.ExecuteReaderAsync();
+            await using var reader = await cmd.ExecuteReaderAsync();
             return await reader.ReadAsync() ? Map(reader) : null;
         }
 
         public virtual async Task<IEnumerable<T>> GetAllAsync()
         {
             var list = new List<T>();
-            using var conn = await OpenAsync();
-            using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName}", conn);
-            using var reader = await cmd.ExecuteReaderAsync();
+            await using var conn = await OpenAsync();
+            await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName}", conn);
+            await using var reader = await cmd.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
                 list.Add(Map(reader));

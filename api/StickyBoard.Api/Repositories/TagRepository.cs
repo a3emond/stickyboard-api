@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class TagRepository : RepositoryBase<Tag>
     {
-        public TagRepository(string connectionString) : base(connectionString) { }
+        public TagRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Tag Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Tag>(reader);

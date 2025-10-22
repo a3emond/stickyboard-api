@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class AuthUserRepository : RepositoryBase<AuthUser>
     {
-        public AuthUserRepository(string connectionString) : base(connectionString) { }
+        public AuthUserRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override AuthUser Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<AuthUser>(reader);
@@ -21,7 +21,7 @@ namespace StickyBoard.Api.Repositories
 
             cmd.Parameters.AddWithValue("uid", e.Id);
             cmd.Parameters.AddWithValue("hash", e.PasswordHash);
-            cmd.Parameters.AddWithValue("role", e.Role.ToString());
+            cmd.Parameters.AddWithValue("role", e.Role);
 
             return (Guid)await cmd.ExecuteScalarAsync();
         }
@@ -38,7 +38,7 @@ namespace StickyBoard.Api.Repositories
 
             cmd.Parameters.AddWithValue("uid", e.Id);
             cmd.Parameters.AddWithValue("hash", e.PasswordHash);
-            cmd.Parameters.AddWithValue("role", e.Role.ToString());
+            cmd.Parameters.AddWithValue("role", e.Role);
 
             return await cmd.ExecuteNonQueryAsync() > 0;
         }

@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class UserRepository : RepositoryBase<User>
     {
-        public UserRepository(string connectionString) : base(connectionString) { }
+        public UserRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override User Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<User>(reader);
@@ -22,7 +22,10 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("email", e.Email);
             cmd.Parameters.AddWithValue("display", e.DisplayName);
             cmd.Parameters.AddWithValue("avatar", (object?)e.AvatarUri ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("prefs", e.Prefs.RootElement.GetRawText());
+
+            // Explicitly mark as JSONB
+            cmd.Parameters.Add("prefs", NpgsqlTypes.NpgsqlDbType.Jsonb)
+                .Value = e.Prefs?.RootElement.GetRawText() ?? "{}";
 
             return (Guid)await cmd.ExecuteScalarAsync();
         }
@@ -41,7 +44,10 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("id", e.Id);
             cmd.Parameters.AddWithValue("display", e.DisplayName);
             cmd.Parameters.AddWithValue("avatar", (object?)e.AvatarUri ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("prefs", e.Prefs.RootElement.GetRawText());
+
+            // Explicitly mark as JSONB
+            cmd.Parameters.Add("prefs", NpgsqlTypes.NpgsqlDbType.Jsonb)
+                .Value = e.Prefs?.RootElement.GetRawText() ?? "{}";
 
             return await cmd.ExecuteNonQueryAsync() > 0;
         }

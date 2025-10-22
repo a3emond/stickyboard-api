@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class RuleRepository : RepositoryBase<Rule>
     {
-        public RuleRepository(string connectionString) : base(connectionString) { }
+        public RuleRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Rule Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Rule>(reader);

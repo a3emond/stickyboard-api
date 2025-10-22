@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class LinkRepository : RepositoryBase<Link>
     {
-        public LinkRepository(string connectionString) : base(connectionString) { }
+        public LinkRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Link Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Link>(reader);

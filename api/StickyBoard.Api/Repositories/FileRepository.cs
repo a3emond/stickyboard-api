@@ -7,7 +7,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class FileRepository : RepositoryBase<File>
     {
-        public FileRepository(string connectionString) : base(connectionString) { }
+        public FileRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override File Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<File>(reader);

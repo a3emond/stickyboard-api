@@ -6,7 +6,7 @@ namespace StickyBoard.Api.Repositories
 {
     public class SectionRepository : RepositoryBase<Section>
     {
-        public SectionRepository(string connectionString) : base(connectionString) { }
+        public SectionRepository(NpgsqlDataSource connectionString) : base(connectionString) { }
 
         protected override Section Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Section>(reader);
