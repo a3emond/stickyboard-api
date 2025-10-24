@@ -21,11 +21,12 @@ namespace StickyBoard.Api.Models.Boards
     }
 
     [Table("permissions")]
-    public class Permission
+    public class Permission : IEntity
     {
         [Column("user_id")] public Guid UserId { get; set; }
         [Column("board_id")] public Guid BoardId { get; set; }
         [Column("role")] public BoardRole Role { get; set; }
         [Column("granted_at")] public DateTime GrantedAt { get; set; }
+        [NotMapped]public DateTime CreatedAt { get; set; } // work around IEntity.... to fix!
     }
 }

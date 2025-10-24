@@ -14,10 +14,10 @@ namespace StickyBoard.Api.Repositories.Base
             _dataSource = dataSource;
         }
 
-        // Opens a mapped connection from the data source
-        protected async Task<NpgsqlConnection> OpenAsync()
+        // Opens a mapped connection from the data source (supports cancellation)
+        protected async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
         {
-            var conn = await _dataSource.OpenConnectionAsync();
+            var conn = await _dataSource.OpenConnectionAsync(ct);
             return conn;
         }
 
@@ -26,31 +26,31 @@ namespace StickyBoard.Api.Repositories.Base
 
         protected abstract T Map(NpgsqlDataReader reader);
 
-        public virtual async Task<T?> GetByIdAsync(Guid id)
+        public virtual async Task<T?> GetByIdAsync(Guid id, CancellationToken ct)
         {
-            await using var conn = await OpenAsync();
+            await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName} WHERE id = @id", conn);
             cmd.Parameters.AddWithValue("id", id);
 
-            await using var reader = await cmd.ExecuteReaderAsync();
-            return await reader.ReadAsync() ? Map(reader) : null;
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            return await reader.ReadAsync(ct) ? Map(reader) : null;
         }
 
-        public virtual async Task<IEnumerable<T>> GetAllAsync()
+        public virtual async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct)
         {
             var list = new List<T>();
-            await using var conn = await OpenAsync();
+            await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName}", conn);
-            await using var reader = await cmd.ExecuteReaderAsync();
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
 
-            while (await reader.ReadAsync())
+            while (await reader.ReadAsync(ct))
                 list.Add(Map(reader));
 
             return list;
         }
 
-        public abstract Task<Guid> CreateAsync(T entity);
-        public abstract Task<bool> UpdateAsync(T entity);
-        public abstract Task<bool> DeleteAsync(Guid id);
+        public abstract Task<Guid> CreateAsync(T entity, CancellationToken ct);
+        public abstract Task<bool> UpdateAsync(T entity, CancellationToken ct);
+        public abstract Task<bool> DeleteAsync(Guid id, CancellationToken ct);
     }
 }

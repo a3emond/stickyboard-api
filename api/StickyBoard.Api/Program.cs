@@ -28,43 +28,56 @@ var connectionString =
 // Create a DataSourceBuilder and register all enums
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 
+// --- Core roles
 dataSourceBuilder.MapEnum<UserRole>("user_role");
-dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
 dataSourceBuilder.MapEnum<BoardRole>("board_role");
+dataSourceBuilder.MapEnum<OrgRole>("org_role");
+
+// --- Visibility & structure
+dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
 dataSourceBuilder.MapEnum<TabScope>("tab_scope");
+
+// --- Cards, links & clusters
 dataSourceBuilder.MapEnum<CardType>("card_type");
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
 dataSourceBuilder.MapEnum<LinkType>("link_type");
 dataSourceBuilder.MapEnum<ClusterType>("cluster_type");
+
+// --- Activity / entity tracking
 dataSourceBuilder.MapEnum<ActivityType>("activity_type");
 dataSourceBuilder.MapEnum<EntityType>("entity_type");
+
+// --- Workers
 dataSourceBuilder.MapEnum<JobKind>("job_kind");
 dataSourceBuilder.MapEnum<JobStatus>("job_status");
 
-// Build a single shared DataSource instance
-var dataSource = dataSourceBuilder.Build();
+// --- Messaging & social
+dataSourceBuilder.MapEnum<MessageType>("message_type");
+dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
 
-// Register it for dependency injection
+// --- Build and register
+var dataSource = dataSourceBuilder.Build();
 builder.Services.AddSingleton(dataSource);
+
 builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
-// Repositories now use NpgsqlDataSource (no need for string constructor)
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<RefreshTokenRepository>();
 builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<AuthUserRepository>();
-
-builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
-builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 // ==========================================================
-// 3. AUTHENTICATION & AUTHORIZATION
+// 3. AUTHENTICATION & AUTHORIZATION (JWT Configuration)
 // ==========================================================
 var jwtSection = configuration.GetSection("Jwt");
 var jwt = jwtSection.Get<JwtOptions>() ?? throw new Exception("JWT configuration missing.");
+builder.Services.Configure<JwtOptions>(jwtSection);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -74,6 +87,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
+            ValidateLifetime = true, // Enforce token expiry
             ValidIssuer = jwt.Issuer,
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
@@ -106,6 +120,7 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 
+    // JWT Auth in Swagger
     var jwtSecurityScheme = new OpenApiSecurityScheme
     {
         Scheme = "bearer",
@@ -113,7 +128,7 @@ builder.Services.AddSwaggerGen(options =>
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
-        Description = "Paste your JWT token here (without 'Bearer ' prefix).",
+        Description = "Paste your access token (no 'Bearer ' prefix).",
         Reference = new OpenApiReference
         {
             Id = JwtBearerDefaults.AuthenticationScheme,

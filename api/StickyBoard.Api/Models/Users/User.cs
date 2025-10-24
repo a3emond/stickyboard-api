@@ -29,4 +29,14 @@ namespace StickyBoard.Api.Models.Users
         [Column("created_at")] public DateTime CreatedAt { get; set; }
         [Column("updated_at")] public DateTime UpdatedAt { get; set; }
     }
+    
+    [Table("refresh_tokens")]
+    public class RefreshToken : IEntity
+    {
+        public string TokenHash { get; set; } = string.Empty;
+        public Guid UserId { get; set; }
+        public DateTime ExpiresAt { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool Revoked { get; set; }
+    }
 }
