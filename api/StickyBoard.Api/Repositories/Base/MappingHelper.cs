@@ -1,12 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using Npgsql;
+using StickyBoard.Api.Models.Base;
 
 namespace StickyBoard.Api.Repositories.Base
 {
     public static class MappingHelper
     {
-        public static T MapEntity<T>(NpgsqlDataReader reader) where T : class, new()
+        public static T MapEntity<T>(NpgsqlDataReader reader) where T : IEntity, new()
         {
             var entity = new T();
             foreach (var prop in typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance))

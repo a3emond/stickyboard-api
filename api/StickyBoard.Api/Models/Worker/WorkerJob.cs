@@ -18,7 +18,7 @@ namespace StickyBoard.Api.Models.Worker
         [Column("attempt")] public int Attempt { get; set; }
         [Column("dedupe_key")] public string? DedupeKey { get; set; }
         [Column("payload")] public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
-        [Column("status")] public JobStatus Status { get; set; } = JobStatus.queued;
+        [Column("status")] public JobStatus Status { get; set; } = JobStatus.pending;
         [Column("claimed_by")] public string? ClaimedBy { get; set; }
         [Column("claimed_at")] public DateTime? ClaimedAt { get; set; }
         [Column("last_error")] public string? LastError { get; set; }
