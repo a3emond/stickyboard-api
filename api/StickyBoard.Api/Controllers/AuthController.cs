@@ -46,7 +46,7 @@ namespace StickyBoard.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Refresh([FromBody] RefreshRequestDto dto, CancellationToken ct)
         {
-            var result = await _authService.RefreshAsync(dto.RefreshToken, ct);
+            var result = await _authService.RefreshAsync(dto.UserId, dto.RefreshToken, ct);
             return Ok(result);
         }
 

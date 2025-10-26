@@ -15,20 +15,25 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordHasher _hasher;
     private readonly IJwtTokenService _jwt;
     private readonly RefreshTokenRepository _refreshTokens;
+    private readonly InviteService _inviteService;
 
     public AuthService(
         UserRepository users,
         AuthUserRepository auth,
         IPasswordHasher hasher,
         IJwtTokenService jwt,
-        RefreshTokenRepository refreshTokens)
+        RefreshTokenRepository refreshTokens,
+        InviteService inviteService)
     {
         _users = users;
         _auth = auth;
         _hasher = hasher;
         _jwt = jwt;
         _refreshTokens = refreshTokens;
+        _inviteService = inviteService;
     }
+
+
 
     // ----------------------------------------------------------------------
     // REGISTER
@@ -50,6 +55,13 @@ public sealed class AuthService : IAuthService
         };
 
         var userId = await _users.CreateAsync(user, ct);
+        
+        // 3b) Redeem invite if provided
+        if (!string.IsNullOrWhiteSpace(dto.InviteToken))
+        {
+            await _inviteService.RedeemInviteAsync(userId, dto.InviteToken, ct);
+        }
+
 
         // 3) Create auth record with hashed password
         var au = new AuthUser
@@ -107,6 +119,10 @@ public sealed class AuthService : IAuthService
         var auth = await _auth.GetByUserIdAsync(user.Id, ct);
         if (auth is null || !_hasher.Verify(dto.Password, auth.PasswordHash))
             throw new UnauthorizedAccessException("Invalid credentials.");
+        // Update last login timestamp
+        auth.LastLogin = DateTime.UtcNow;
+        await _auth.UpdateAsync(auth, ct);
+
 
         // 3) Create short-lived access token
         var token = _jwt.CreateToken(user.Id, user.Email, auth.Role.ToString());
@@ -143,11 +159,12 @@ public sealed class AuthService : IAuthService
     // ----------------------------------------------------------------------
     // REFRESH TOKEN FLOW
     // ----------------------------------------------------------------------
-    public async Task<AuthResponseDto> RefreshAsync(string refreshToken, CancellationToken ct)
+    public async Task<AuthResponseDto> RefreshAsync(Guid userId,string refreshToken, CancellationToken ct)
     {
         // 1) Fetch all refresh tokens (small set) and verify hash match
-        var tokens = await _refreshTokens.GetAllAsync(ct);
-        var match = tokens.FirstOrDefault(t => _hasher.Verify(refreshToken, t.TokenHash));
+        var all = await _refreshTokens.GetByUserIdAsync(userId, ct);
+        var match = all.FirstOrDefault(t => _hasher.Verify(refreshToken, t.TokenHash));
+
 
         if (match is null || match.ExpiresAt < DateTime.UtcNow || match.Revoked)
             throw new UnauthorizedAccessException("Invalid or expired refresh token.");

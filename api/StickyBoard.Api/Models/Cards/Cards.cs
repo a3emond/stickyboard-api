@@ -35,10 +35,6 @@ namespace StickyBoard.Api.Models.Cards
     {
         [Key, Column("id")] public Guid Id { get; set; }
         [Column("name")] public string Name { get; set; } = string.Empty;
-        
-        // quick fix to implement IEntity 
-        // TODO: rethink a better solution
-        [NotMapped] public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     [Table("card_tags")]

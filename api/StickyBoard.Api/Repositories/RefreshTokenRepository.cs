@@ -69,5 +69,22 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("uid", userId);
             await cmd.ExecuteNonQueryAsync(ct);
         }
+        
+        public async Task<IEnumerable<RefreshToken>> GetByUserIdAsync(Guid userId, CancellationToken ct)
+        {
+            var list = new List<RefreshToken>();
+            await using var conn = await OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(
+                "SELECT * FROM refresh_tokens WHERE user_id=@u ORDER BY created_at DESC", conn);
+
+            cmd.Parameters.AddWithValue("u", userId);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                list.Add(MappingHelper.MapEntity<RefreshToken>(reader));
+
+            return list;
+        }
+
     }
 }

@@ -67,7 +67,7 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<RefreshTokenRepository>();
-builder.Services.AddScoped<UserRepository>();
+builder.Services.AddScoped<UserRepository>(); // why its needed here? should the AuthService have it internally?
 builder.Services.AddScoped<AuthUserRepository>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();

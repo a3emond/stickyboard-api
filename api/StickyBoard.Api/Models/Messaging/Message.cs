@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using StickyBoard.Api.Models.Base;
+using StickyBoard.Api.Models.Enums;
 
 namespace StickyBoard.Api.Models.Messaging;
 
@@ -27,7 +28,7 @@ public class Invite : IEntity
     [Column("email")] public string Email { get; set; } = string.Empty;
     [Column("board_id")] public Guid? BoardId { get; set; }
     [Column("org_id")] public Guid? OrganizationId { get; set; }
-    [Column("role")] public string? Role { get; set; }
+    [Column("role")] public BoardRole? Role { get; set; }
     [Column("token")] public string Token { get; set; } = string.Empty;
     [Column("accepted")] public bool Accepted { get; set; } = false;
     [Column("created_at")] public DateTime CreatedAt { get; set; }

@@ -23,7 +23,7 @@ namespace StickyBoard.Api.Repositories
                 VALUES (@scope, @board, @section, @title, @type, @config, @pos)
                 RETURNING id", conn);
 
-            cmd.Parameters.AddWithValue("scope", e.Scope.ToString());
+            cmd.Parameters.AddWithValue("scope", e.Scope);
             cmd.Parameters.AddWithValue("board", e.BoardId);
             cmd.Parameters.AddWithValue("section", (object?)e.SectionId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("title", e.Title);
