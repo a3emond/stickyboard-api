@@ -25,40 +25,41 @@ var connectionString =
     configuration["DATABASE_URL"]
     ?? $"Host={dbHost};Database={dbName};Username={dbUser};Password={dbPass}";
 
-// Create a DataSourceBuilder and register all enums
+// Create DataSourceBuilder and register all PostgreSQL ENUM mappings
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 
-// --- Core roles
+// --- User & Authorization
 dataSourceBuilder.MapEnum<UserRole>("user_role");
 dataSourceBuilder.MapEnum<BoardRole>("board_role");
 dataSourceBuilder.MapEnum<OrgRole>("org_role");
 
-// --- Visibility & structure
+// --- Visibility & Structure
 dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
 dataSourceBuilder.MapEnum<TabScope>("tab_scope");
 
-// --- Cards, links & clusters
+// --- Cards, Links & Clusters
 dataSourceBuilder.MapEnum<CardType>("card_type");
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
 dataSourceBuilder.MapEnum<LinkType>("link_type");
 dataSourceBuilder.MapEnum<ClusterType>("cluster_type");
 
-// --- Activity / entity tracking
+// --- Activity & Entity Types
 dataSourceBuilder.MapEnum<ActivityType>("activity_type");
 dataSourceBuilder.MapEnum<EntityType>("entity_type");
 
-// --- Workers
+// --- Worker / Job Queue
 dataSourceBuilder.MapEnum<JobKind>("job_kind");
 dataSourceBuilder.MapEnum<JobStatus>("job_status");
 
-// --- Messaging & social
+// --- Messaging & Social
 dataSourceBuilder.MapEnum<MessageType>("message_type");
 dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
 
-// --- Build and register
+// Build the Npgsql DataSource
 var dataSource = dataSourceBuilder.Build();
-builder.Services.AddSingleton(dataSource);
 
+// Register in DI
+builder.Services.AddSingleton(dataSource);
 builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 
 // ==========================================================

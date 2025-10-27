@@ -39,17 +39,17 @@ namespace StickyBoard.Api.Models.Enums
     // =======================================================
     // Worker / Jobs
     // =======================================================
-    public enum JobKind
+    public enum JobKind 
     {
         RuleExecutor, ClusterRebuilder, SearchIndexer,
         SyncCompactor, NotificationDispatcher, AnalyticsExporter, Generic
     }
 
-    public enum JobStatus { pending, running, completed, failed }
+    public enum JobStatus { queued,running,succeeded,failed,canceled,dead}
 
     // =======================================================
     // Messaging & Social
     // =======================================================
     public enum MessageType { invite, system, direct, org_invite }
-    public enum RelationStatus { pending, accepted, blocked }
+    public enum RelationStatus { active, blocked, inactive,}
 }

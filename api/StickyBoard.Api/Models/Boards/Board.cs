@@ -21,14 +21,4 @@ namespace StickyBoard.Api.Models.Boards
         [Column("rules")] public JsonDocument Rules { get; set; } = JsonDocument.Parse("[]");
         [Column("updated_at")] public DateTime UpdatedAt { get; set; }
     }
-
-
-    [Table("permissions")]
-    public class Permission : IEntity
-    {
-        [Column("user_id")] public Guid UserId { get; set; }
-        [Column("board_id")] public Guid BoardId { get; set; }
-        [Column("role")] public BoardRole Role { get; set; }
-        [Column("granted_at")] public DateTime GrantedAt { get; set; }
-    }
 }

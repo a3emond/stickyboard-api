@@ -15,7 +15,7 @@ namespace StickyBoard.Api.Repositories.Base
         }
 
         // Opens a mapped connection from the data source (supports cancellation)
-        protected async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
+        public async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
         {
             var conn = await _dataSource.OpenConnectionAsync(ct);
             return conn;

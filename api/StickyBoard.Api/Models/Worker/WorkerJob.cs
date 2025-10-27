@@ -18,7 +18,7 @@ namespace StickyBoard.Api.Models.Worker
         [Column("attempt")] public int Attempt { get; set; }
         [Column("dedupe_key")] public string? DedupeKey { get; set; }
         [Column("payload")] public JsonDocument Payload { get; set; } = JsonDocument.Parse("{}");
-        [Column("status")] public JobStatus Status { get; set; } = JobStatus.pending;
+        [Column("status")] public JobStatus Status { get; set; } = JobStatus.queued;
         [Column("claimed_by")] public string? ClaimedBy { get; set; }
         [Column("claimed_at")] public DateTime? ClaimedAt { get; set; }
         [Column("last_error")] public string? LastError { get; set; }
@@ -27,7 +27,7 @@ namespace StickyBoard.Api.Models.Worker
     }
 
     [Table("worker_job_attempts")]
-    public class WorkerJobAttempt
+    public class WorkerJobAttempt : IEntity
     {
         [Key, Column("id")] public long Id { get; set; }
         [Column("job_id")] public Guid JobId { get; set; }
@@ -38,7 +38,7 @@ namespace StickyBoard.Api.Models.Worker
     }
 
     [Table("worker_job_deadletters")]
-    public class WorkerJobDeadletter
+    public class WorkerJobDeadletter : IEntity
     {
         [Key, Column("id")] public Guid Id { get; set; }
         [Column("job_id")] public Guid? JobId { get; set; }

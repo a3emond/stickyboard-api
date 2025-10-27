@@ -59,7 +59,7 @@ public sealed class AuthService : IAuthService
         // 3b) Redeem invite if provided
         if (!string.IsNullOrWhiteSpace(dto.InviteToken))
         {
-            await _inviteService.RedeemInviteAsync(userId, dto.InviteToken, ct);
+            await _inviteService.RedeemAsync(userId, dto.InviteToken, ct);
         }
 
 

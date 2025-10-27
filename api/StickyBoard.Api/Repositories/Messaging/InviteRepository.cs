@@ -91,6 +91,22 @@ namespace StickyBoard.Api.Repositories
                 list.Add(Map(reader));
             return list;
         }
+        
+        public async Task<bool> CancelIfOwnedAsync(Guid senderId, Guid inviteId, CancellationToken ct)
+        {
+            await using var conn = await OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(@"
+                DELETE FROM invites
+                WHERE id=@id AND sender_id=@s AND accepted=false
+                RETURNING id;", conn);
+
+            cmd.Parameters.AddWithValue("id", inviteId);
+            cmd.Parameters.AddWithValue("s", senderId);
+
+            var result = await cmd.ExecuteScalarAsync(ct);
+            return result is not null;
+        }
+
 
     }
 }

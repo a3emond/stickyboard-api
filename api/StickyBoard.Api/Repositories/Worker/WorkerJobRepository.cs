@@ -67,13 +67,13 @@ namespace StickyBoard.Api.Repositories
         // ----------------------------------------------------------------------
 
         // Retrieve jobs ready to run (unclaimed, scheduled for now or earlier)
-        public async Task<IEnumerable<WorkerJob>> GetPendingAsync(CancellationToken ct)
+        public async Task<IEnumerable<WorkerJob>> GetQueuedAsync(CancellationToken ct)
         {
             var list = new List<WorkerJob>();
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
                 SELECT * FROM worker_jobs
-                WHERE status = 'pending'
+                WHERE status = 'queued'
                   AND run_at <= now()
                 ORDER BY priority DESC, run_at ASC
                 LIMIT 100", conn);
@@ -91,10 +91,9 @@ namespace StickyBoard.Api.Repositories
             await using var conn = await OpenAsync(ct);
             await using var tx = await conn.BeginTransactionAsync(ct);
 
-            // Select the next pending job (for update)
             await using var selectCmd = new NpgsqlCommand(@"
                 SELECT * FROM worker_jobs
-                WHERE status = 'pending'
+                WHERE status = 'queued'
                   AND run_at <= now()
                 ORDER BY priority DESC, run_at ASC
                 LIMIT 1
@@ -110,7 +109,6 @@ namespace StickyBoard.Api.Repositories
             var job = Map(reader);
             await reader.CloseAsync();
 
-            // Mark as claimed
             await using var updateCmd = new NpgsqlCommand(@"
                 UPDATE worker_jobs
                 SET status = 'running',
@@ -135,13 +133,12 @@ namespace StickyBoard.Api.Repositories
         }
 
         // Mark job as successfully completed
-        public async Task<bool> MarkCompletedAsync(Guid jobId, CancellationToken ct)
+        public async Task<bool> MarkSucceededAsync(Guid jobId, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
                 UPDATE worker_jobs
-                SET status = 'completed',
-                    completed_at = now(),
+                SET status = 'succeeded',
                     updated_at = now()
                 WHERE id = @id", conn);
 
@@ -156,7 +153,7 @@ namespace StickyBoard.Api.Repositories
             await using var cmd = new NpgsqlCommand(@"
                 UPDATE worker_jobs
                 SET status = 'failed',
-                    error_message = @err,
+                    last_error = @err,
                     updated_at = now()
                 WHERE id = @id", conn);
 
@@ -172,7 +169,7 @@ namespace StickyBoard.Api.Repositories
             await using var cmd = new NpgsqlCommand(@"
                 DELETE FROM worker_jobs
                 WHERE created_at < @cutoff
-                   OR (status IN ('completed', 'failed') AND completed_at < @cutoff)", conn);
+                   OR (status IN ('succeeded','failed','dead') AND updated_at < @cutoff)", conn);
 
             cmd.Parameters.AddWithValue("cutoff", cutoffUtc);
             return await cmd.ExecuteNonQueryAsync(ct);

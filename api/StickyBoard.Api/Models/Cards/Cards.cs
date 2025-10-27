@@ -29,29 +29,4 @@ namespace StickyBoard.Api.Models.Cards
         [Column("updated_at")] public DateTime UpdatedAt { get; set; }
         [Column("version")] public int Version { get; set; } = 0;
     }
-
-    [Table("tags")]
-    public class Tag :IEntity
-    {
-        [Key, Column("id")] public Guid Id { get; set; }
-        [Column("name")] public string Name { get; set; } = string.Empty;
-    }
-
-    [Table("card_tags")]
-    public class CardTag
-    {
-        [Column("card_id")] public Guid CardId { get; set; }
-        [Column("tag_id")] public Guid TagId { get; set; }
-    }
-
-    [Table("links")]
-    public class Link : IEntity
-    {
-        [Key, Column("id")] public Guid Id { get; set; }
-        [Column("from_card")] public Guid FromCard { get; set; }
-        [Column("to_card")] public Guid ToCard { get; set; }
-        [Column("rel_type")] public LinkType RelType { get; set; }
-        [Column("created_at")] public DateTime CreatedAt { get; set; }
-        [Column("created_by")] public Guid? CreatedBy { get; set; }
-    }
 }
