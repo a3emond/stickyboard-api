@@ -4,7 +4,7 @@ using System.Text.Json;
 using StickyBoard.Api.Models.Base;
 using StickyBoard.Api.Models.Enums;
 
-namespace StickyBoard.Api.Models.Clustering;
+namespace StickyBoard.Api.Models.Activities;
 
 [Table("activities")]
 public class Activity : IEntity

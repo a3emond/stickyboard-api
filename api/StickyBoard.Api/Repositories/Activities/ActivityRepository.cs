@@ -1,5 +1,5 @@
 ﻿using Npgsql;
-using StickyBoard.Api.Models.Clustering;
+using StickyBoard.Api.Models.Activities;
 using StickyBoard.Api.Repositories.Base;
 
 namespace StickyBoard.Api.Repositories

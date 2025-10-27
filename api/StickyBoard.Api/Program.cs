@@ -65,13 +65,65 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
+
+// --- Core Authentication & Users
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<RefreshTokenRepository>();
-builder.Services.AddScoped<UserRepository>(); // why its needed here? should the AuthService have it internally?
 builder.Services.AddScoped<AuthUserRepository>();
+builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+
+// --- Messaging & Relations
+builder.Services.AddScoped<MessageRepository>();
+builder.Services.AddScoped<MessageService>();
+builder.Services.AddScoped<InviteRepository>();
+builder.Services.AddScoped<InviteService>();
+builder.Services.AddScoped<UserRelationRepository>();
+builder.Services.AddScoped<UserRelationService>();
+
+// --- Boards & Permissions
+builder.Services.AddScoped<BoardRepository>();
+builder.Services.AddScoped<BoardService>();
+builder.Services.AddScoped<PermissionRepository>();
+builder.Services.AddScoped<PermissionService>();
+
+// --- Sections & Tabs
+builder.Services.AddScoped<SectionRepository>();
+builder.Services.AddScoped<SectionService>();
+builder.Services.AddScoped<TabRepository>();
+builder.Services.AddScoped<TabService>();
+
+// --- Cards & Related Entities
+builder.Services.AddScoped<CardRepository>();
+builder.Services.AddScoped<CardService>();
+builder.Services.AddScoped<TagRepository>();
+builder.Services.AddScoped<CardTagRepository>();
+builder.Services.AddScoped<LinkRepository>();
+builder.Services.AddScoped<CardRelationsService>();
+
+// --- Organizations
+builder.Services.AddScoped<OrganizationRepository>();
+builder.Services.AddScoped<OrganizationMemberRepository>();
+builder.Services.AddScoped<OrganizationService>();
+
+// --- Automation (Rules & Clusters)
+builder.Services.AddScoped<RuleRepository>();
+builder.Services.AddScoped<RuleService>();
+builder.Services.AddScoped<ClusterRepository>();
+builder.Services.AddScoped<ClusterService>();
+
+// --- Activities (Audit Log)
+builder.Services.AddScoped<ActivityRepository>();
+builder.Services.AddScoped<ActivityService>();
+
+// --- Background Worker (Job Queue)
+builder.Services.AddScoped<WorkerJobRepository>();
+builder.Services.AddScoped<WorkerJobAttemptRepository>();
+builder.Services.AddScoped<WorkerJobDeadletterRepository>();
+// Services for these will be added later (WorkerJobService, etc.)
+
 
 // ==========================================================
 // 3. AUTHENTICATION & AUTHORIZATION (JWT Configuration)

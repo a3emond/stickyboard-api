@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using StickyBoard.Api.Models.Base;
+using StickyBoard.Api.Models.Enums;
 
 namespace StickyBoard.Api.Models.Messaging;
 
@@ -12,7 +13,7 @@ public class Message : IEntity
     [Column("receiver_id")] public Guid ReceiverId { get; set; }
     [Column("subject")] public string? Subject { get; set; }
     [Column("body")] public string? Body { get; set; }
-    [Column("type")] public string Type { get; set; } = "general";
+    [Column("type")] public MessageType Type { get; set; } = MessageType.direct;
     [Column("related_board")] public Guid? RelatedBoardId { get; set; }
     [Column("related_org")] public Guid? RelatedOrganizationId { get; set; }
     [Column("status")] public string Status { get; set; } = "unread";

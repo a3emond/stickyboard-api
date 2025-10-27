@@ -1,0 +1,95 @@
+﻿using StickyBoard.Api.DTOs.Automation;
+using StickyBoard.Api.Repositories;
+using StickyBoard.Api.Models.Clustering;
+using StickyBoard.Api.Models.Enums;
+using System.Text.Json;
+
+namespace StickyBoard.Api.Services
+{
+    public sealed class ClusterService
+    {
+        private readonly ClusterRepository _clusters;
+        private readonly BoardRepository _boards;
+        private readonly PermissionRepository _permissions;
+
+        public ClusterService(ClusterRepository clusters, BoardRepository boards, PermissionRepository permissions)
+        {
+            _clusters = clusters;
+            _boards = boards;
+            _permissions = permissions;
+        }
+
+        private async Task EnsureCanEditAsync(Guid userId, Guid boardId, CancellationToken ct)
+        {
+            var board = await _boards.GetByIdAsync(boardId, ct);
+            if (board is null)
+                throw new KeyNotFoundException("Board not found.");
+
+            var isOwner = board.OwnerId == userId;
+            var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
+
+            if (!(isOwner || role is BoardRole.owner or BoardRole.editor))
+                throw new UnauthorizedAccessException("User not allowed to modify clusters for this board.");
+        }
+
+        // ----------------------------------------------------------------------
+        // READ
+        // ----------------------------------------------------------------------
+
+        public async Task<IEnumerable<Cluster>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        {
+            await EnsureCanEditAsync(userId, boardId, ct);
+            return await _clusters.GetByBoardAsync(boardId, ct);
+        }
+
+        // ----------------------------------------------------------------------
+        // CREATE / UPDATE / DELETE
+        // ----------------------------------------------------------------------
+
+        public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateClusterDto dto, CancellationToken ct)
+        {
+            await EnsureCanEditAsync(userId, boardId, ct);
+
+            var cluster = new Cluster
+            {
+                BoardId = boardId,
+                ClusterType = dto.ClusterType,
+                RuleDef = dto.RuleDefJson is not null ? JsonDocument.Parse(dto.RuleDefJson) : null,
+                VisualMeta = JsonDocument.Parse(dto.VisualMetaJson ?? "{}"),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            return await _clusters.CreateAsync(cluster, ct);
+        }
+
+        public async Task<bool> UpdateAsync(Guid userId, Guid clusterId, UpdateClusterDto dto, CancellationToken ct)
+        {
+            var existing = await _clusters.GetByIdAsync(clusterId, ct);
+            if (existing is null)
+                return false;
+
+            await EnsureCanEditAsync(userId, existing.BoardId, ct);
+
+            if (dto.ClusterType.HasValue)
+                existing.ClusterType = dto.ClusterType.Value;
+            if (dto.RuleDefJson is not null)
+                existing.RuleDef = JsonDocument.Parse(dto.RuleDefJson);
+            if (dto.VisualMetaJson is not null)
+                existing.VisualMeta = JsonDocument.Parse(dto.VisualMetaJson);
+
+            existing.UpdatedAt = DateTime.UtcNow;
+            return await _clusters.UpdateAsync(existing, ct);
+        }
+
+        public async Task<bool> DeleteAsync(Guid userId, Guid clusterId, CancellationToken ct)
+        {
+            var existing = await _clusters.GetByIdAsync(clusterId, ct);
+            if (existing is null)
+                return false;
+
+            await EnsureCanEditAsync(userId, existing.BoardId, ct);
+            return await _clusters.DeleteAsync(clusterId, ct);
+        }
+    }
+}
