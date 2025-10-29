@@ -1,14 +1,17 @@
 using System.Data;
 using System.Text;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Npgsql;
 using StickyBoard.Api.Auth;
+using StickyBoard.Api.Middleware;
 using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Models.Enums;
+using StickyBoard.Api.Repositories.FilesAndOps;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -118,11 +121,20 @@ builder.Services.AddScoped<ClusterService>();
 builder.Services.AddScoped<ActivityRepository>();
 builder.Services.AddScoped<ActivityService>();
 
+// --- Files & Operations
+builder.Services.AddScoped<FileRepository>();
+builder.Services.AddScoped<FileService>();
+builder.Services.AddScoped<OperationRepository>();
+builder.Services.AddScoped<OperationService>();
+
+
 // --- Background Worker (Job Queue)
 builder.Services.AddScoped<WorkerJobRepository>();
 builder.Services.AddScoped<WorkerJobAttemptRepository>();
 builder.Services.AddScoped<WorkerJobDeadletterRepository>();
-// Services for these will be added later (WorkerJobService, etc.)
+builder.Services.AddScoped<WorkerJobService>();
+builder.Services.AddScoped<SyncService>();
+
 
 
 // ==========================================================
@@ -132,7 +144,11 @@ var jwtSection = configuration.GetSection("Jwt");
 var jwt = jwtSection.Get<JwtOptions>() ?? throw new Exception("JWT configuration missing.");
 builder.Services.Configure<JwtOptions>(jwtSection);
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -146,7 +162,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
-    });
+    })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>("ApiKey", null);
 
 builder.Services.AddAuthorization(options =>
 {
@@ -194,6 +211,8 @@ builder.Services.AddSwaggerGen(options =>
     {
         { jwtSecurityScheme, Array.Empty<string>() }
     });
+    options.OperationFilter<StickyBoard.Api.Swagger.DefaultResponsesOperationFilter>();
+
 });
 
 // ==========================================================
@@ -204,6 +223,9 @@ var app = builder.Build();
 // ==========================================================
 // 6. OPTIONAL CACHE-BUSTING + SWAGGER SETUP
 // ==========================================================
+
+app.UseMiddleware<ErrorHandlingMiddleware>();
+
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/swagger/v1/swagger.json"))
@@ -265,5 +287,14 @@ else
     Console.WriteLine("\n[StickyBoard API] Running in PRODUCTION mode");
     Console.WriteLine("Swagger UI available at: /api/swagger (proxied via Apache)\n");
 }
+
+// --- Worker key log ---
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var workerKey = configuration["WORKER_API_KEY"];
+
+if (string.IsNullOrEmpty(workerKey))
+    logger.LogWarning("WORKER_API_KEY is not set. Worker authentication will fail.");
+else
+    logger.LogInformation("Worker key loaded successfully (base64 length: {len})", workerKey.Length);
 
 app.Run();

@@ -30,7 +30,7 @@ namespace StickyBoard.Api.Services
                 Type = dto.Type,
                 RelatedBoardId = dto.RelatedBoardId,
                 RelatedOrganizationId = dto.RelatedOrganizationId,
-                Status = "unread",
+                Status = MessageStatus.unread,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -46,7 +46,7 @@ namespace StickyBoard.Api.Services
         public Task<int> GetUnreadCountAsync(Guid userId, CancellationToken ct)
             => _messages.GetUnreadCountAsync(userId, ct);
 
-        public async Task<bool> UpdateStatusAsync(Guid userId, Guid messageId, string status, CancellationToken ct)
+        public async Task<bool> UpdateStatusAsync(Guid userId, Guid messageId, MessageStatus status, CancellationToken ct)
         {
             var msg = await _messages.GetByIdAsync(messageId, ct);
             if (msg is null || msg.ReceiverId != userId)

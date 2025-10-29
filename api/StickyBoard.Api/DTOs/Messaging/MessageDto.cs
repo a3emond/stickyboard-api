@@ -13,7 +13,7 @@ namespace StickyBoard.Api.DTOs.Messages
         public MessageType Type { get; set; }
         public Guid? RelatedBoardId { get; set; }
         public Guid? RelatedOrganizationId { get; set; }
-        public string Status { get; set; } = "unread"; // Kept as string until MessageStatus enum exists
+        public MessageStatus Status { get; set; } = MessageStatus.unread;
         public DateTime CreatedAt { get; set; }
     }
 
@@ -29,6 +29,6 @@ namespace StickyBoard.Api.DTOs.Messages
 
     public sealed class UpdateMessageStatusDto
     {
-        public string Status { get; set; } = "read";
+        public MessageStatus Status { get; set; } = MessageStatus.read;
     }
 }

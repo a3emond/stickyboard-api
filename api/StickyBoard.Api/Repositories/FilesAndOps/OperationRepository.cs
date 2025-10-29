@@ -2,7 +2,7 @@
 using StickyBoard.Api.Models.FilesAndOps;
 using StickyBoard.Api.Repositories.Base;
 
-namespace StickyBoard.Api.Repositories
+namespace StickyBoard.Api.Repositories.FilesAndOps
 {
     public class OperationRepository : RepositoryBase<Operation>
     {
@@ -14,21 +14,24 @@ namespace StickyBoard.Api.Repositories
         // ----------------------------------------------------------------------
         // CREATE / UPDATE / DELETE
         // ----------------------------------------------------------------------
-
         public override async Task<Guid> CreateAsync(Operation e, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
                 INSERT INTO operations (
-                    device_id, user_id, entity, entity_id, op_type, payload, version_prev, version_next
+                    device_id, user_id, entity, entity_id,
+                    op_type, payload, version_prev, version_next
                 )
-                VALUES (@device, @user, @entity, @eid, @type, @payload, @vp, @vn)
+                VALUES (
+                    @device, @user, @entity, @eid,
+                    @type, @payload, @vp, @vn
+                )
                 RETURNING id", conn);
 
             cmd.Parameters.AddWithValue("device", e.DeviceId);
             cmd.Parameters.AddWithValue("user", e.UserId);
-            cmd.Parameters.AddWithValue("entity", e.Entity.ToString());
-            cmd.Parameters.AddWithValue("eid", e.EntityId);
+            cmd.Parameters.AddWithValue("entity", e.Entity.ToString().ToLower()); // enum -> lowercase
+            cmd.Parameters.AddWithValue("eid", (object?)e.EntityId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("type", e.OpType);
             cmd.Parameters.AddWithValue("payload", e.Payload.RootElement.GetRawText());
             cmd.Parameters.AddWithValue("vp", (object?)e.VersionPrev ?? DBNull.Value);
@@ -39,13 +42,12 @@ namespace StickyBoard.Api.Repositories
 
         public override Task<bool> UpdateAsync(Operation e, CancellationToken ct)
         {
-            // Operations are immutable by design
+            // Operations are immutable
             return Task.FromResult(false);
         }
 
         public override async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
-            // Normally not deleted, but may be pruned by maintenance jobs
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand("DELETE FROM operations WHERE id=@id", conn);
             cmd.Parameters.AddWithValue("id", id);
@@ -56,7 +58,6 @@ namespace StickyBoard.Api.Repositories
         // ADDITIONAL QUERIES
         // ----------------------------------------------------------------------
 
-        // Retrieve all operations for a given user
         public async Task<IEnumerable<Operation>> GetByUserAsync(Guid userId, CancellationToken ct)
         {
             var list = new List<Operation>();
@@ -67,15 +68,12 @@ namespace StickyBoard.Api.Repositories
                 ORDER BY created_at DESC", conn);
 
             cmd.Parameters.AddWithValue("uid", userId);
-
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
                 list.Add(Map(reader));
-
             return list;
         }
 
-        // Retrieve all operations performed by a specific device (for device sync logs)
         public async Task<IEnumerable<Operation>> GetByDeviceAsync(Guid deviceId, CancellationToken ct)
         {
             var list = new List<Operation>();
@@ -86,15 +84,12 @@ namespace StickyBoard.Api.Repositories
                 ORDER BY created_at DESC", conn);
 
             cmd.Parameters.AddWithValue("dev", deviceId);
-
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
                 list.Add(Map(reader));
-
             return list;
         }
 
-        // Retrieve all operations since a given timestamp (for incremental sync)
         public async Task<IEnumerable<Operation>> GetSinceAsync(DateTime sinceUtc, CancellationToken ct)
         {
             var list = new List<Operation>();
@@ -105,15 +100,12 @@ namespace StickyBoard.Api.Repositories
                 ORDER BY created_at ASC", conn);
 
             cmd.Parameters.AddWithValue("since", sinceUtc);
-
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
                 list.Add(Map(reader));
-
             return list;
         }
 
-        // Retrieve pending (unprocessed) operations, used by background workers
         public async Task<IEnumerable<Operation>> GetPendingAsync(CancellationToken ct)
         {
             var list = new List<Operation>();
@@ -126,11 +118,9 @@ namespace StickyBoard.Api.Repositories
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
                 list.Add(Map(reader));
-
             return list;
         }
 
-        // Mark an operation as processed (for worker cleanup)
         public async Task<bool> MarkProcessedAsync(Guid id, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -144,7 +134,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // Delete operations older than a specified age (maintenance)
         public async Task<int> DeleteOlderThanAsync(DateTime cutoffUtc, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);

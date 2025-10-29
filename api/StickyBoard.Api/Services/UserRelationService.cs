@@ -21,12 +21,20 @@ namespace StickyBoard.Api.Services
         // ------------------------------------------------------------
         public async Task<bool> CreateAsync(Guid userId, Guid friendId, CancellationToken ct)
         {
+            // Skip if already active both ways
+            var existingA = await _relations.GetAsync(userId, friendId, ct);
+            var existingB = await _relations.GetAsync(friendId, userId, ct);
+            if (existingA?.Status == RelationStatus.active && existingB?.Status == RelationStatus.active)
+                return true;
+
             var a = new UserRelation { UserId = userId, FriendId = friendId, Status = RelationStatus.active };
             var b = new UserRelation { UserId = friendId, FriendId = userId, Status = RelationStatus.active };
+
             await _relations.CreateAsync(a, ct);
             await _relations.CreateAsync(b, ct);
             return true;
         }
+
 
         // ------------------------------------------------------------
         // UPDATE (block, inactive, etc.)

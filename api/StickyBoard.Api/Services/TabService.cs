@@ -26,11 +26,13 @@ namespace StickyBoard.Api.Services
             _permissions = permissions;
         }
 
+        // ------------------------------------------------------------
+        // PERMISSIONS
+        // ------------------------------------------------------------
         private async Task EnsureCanEditAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
-            var board = await _boards.GetByIdAsync(boardId, ct);
-            if (board is null)
-                throw new KeyNotFoundException("Board not found.");
+            var board = await _boards.GetByIdAsync(boardId, ct)
+                        ?? throw new KeyNotFoundException("Board not found.");
 
             var isOwner = board.OwnerId == userId;
             var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
@@ -39,30 +41,39 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to modify this board.");
         }
 
+        private async Task EnsureCanViewAsync(Guid userId, Guid boardId, CancellationToken ct)
+        {
+            var board = await _boards.GetByIdAsync(boardId, ct)
+                        ?? throw new KeyNotFoundException("Board not found.");
+
+            var isOwner = board.OwnerId == userId;
+            var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
+
+            if (!(isOwner || role is BoardRole.owner or BoardRole.editor or BoardRole.viewer))
+                throw new UnauthorizedAccessException("User not allowed to view this board.");
+        }
+
         // ----------------------------------------------------------------------
         // READ
         // ----------------------------------------------------------------------
-
         public async Task<IEnumerable<Tab>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
-            await EnsureCanEditAsync(userId, boardId, ct);
+            await EnsureCanViewAsync(userId, boardId, ct);
             return await _tabs.GetByBoardAsync(boardId, ct);
         }
 
         public async Task<IEnumerable<Tab>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
         {
-            var section = await _sections.GetByIdAsync(sectionId, ct);
-            if (section is null)
-                throw new KeyNotFoundException("Section not found.");
+            var section = await _sections.GetByIdAsync(sectionId, ct)
+                          ?? throw new KeyNotFoundException("Section not found.");
 
-            await EnsureCanEditAsync(userId, section.BoardId, ct);
+            await EnsureCanViewAsync(userId, section.BoardId, ct);
             return await _tabs.GetBySectionAsync(sectionId, ct);
         }
 
         // ----------------------------------------------------------------------
         // CREATE / UPDATE / DELETE
         // ----------------------------------------------------------------------
-
         public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateTabDto dto, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
@@ -117,7 +128,6 @@ namespace StickyBoard.Api.Services
         // ----------------------------------------------------------------------
         // REORDER
         // ----------------------------------------------------------------------
-
         public async Task<int> ReorderAsync(Guid userId, TabScope scope, Guid parentId, IEnumerable<ReorderTabDto> updates, CancellationToken ct)
         {
             if (scope == TabScope.board)
@@ -129,9 +139,8 @@ namespace StickyBoard.Api.Services
 
             if (scope == TabScope.section)
             {
-                var section = await _sections.GetByIdAsync(parentId, ct);
-                if (section is null)
-                    throw new KeyNotFoundException("Section not found.");
+                var section = await _sections.GetByIdAsync(parentId, ct)
+                              ?? throw new KeyNotFoundException("Section not found.");
 
                 await EnsureCanEditAsync(userId, section.BoardId, ct);
                 var mapped = updates.Select(u => (u.Id, u.Position));

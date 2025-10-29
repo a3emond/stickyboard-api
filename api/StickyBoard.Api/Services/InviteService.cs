@@ -1,13 +1,11 @@
 ﻿using System.Security.Cryptography;
-using System.Text;
 using StickyBoard.Api.DTOs.Messaging;
+using StickyBoard.Api.Models;
 using StickyBoard.Api.Models.Boards;
 using StickyBoard.Api.Models.Enums;
-using StickyBoard.Api.Models.Messaging;
 using StickyBoard.Api.Models.Organizations;
-using StickyBoard.Api.Repositories;
-using StickyBoard.Api.Services;
 using StickyBoard.Api.Models.Social;
+using StickyBoard.Api.Repositories;
 
 namespace StickyBoard.Api.Services
 {
@@ -42,36 +40,47 @@ namespace StickyBoard.Api.Services
             if (string.IsNullOrWhiteSpace(email))
                 throw new ArgumentException("Email is required.");
 
-            // Validation: exactly one of friend | board | org paths
-            var isFriendInvite = dto.BoardId is null && dto.OrganizationId is null;
-            if (!isFriendInvite)
+            var hasBoard = dto.BoardId.HasValue;
+            var hasOrg = dto.OrganizationId.HasValue;
+            var isFriendInvite = !hasBoard && !hasOrg;
+
+            // Must be exactly one target or none (friend)
+            if (hasBoard && hasOrg)
+                throw new ArgumentException("Cannot target both board and organization.");
+            
+            // Parse roles depending on target
+            BoardRole? boardRole = null;
+            OrgRole? orgRole = null;
+
+            if (hasBoard)
             {
-                if (dto.BoardId is null && dto.OrganizationId is null)
-                    throw new ArgumentException("Invalid invite target.");
-                if (string.IsNullOrWhiteSpace(dto.Role))
-                    throw new ArgumentException("Role is required for board/org invites.");
+                if (string.IsNullOrWhiteSpace(dto.BoardRole))
+                    throw new ArgumentException("Board role is required for board invites.");
+                if (!Enum.TryParse(dto.BoardRole, true, out BoardRole parsed))
+                    throw new ArgumentException("Invalid board role.");
+                boardRole = parsed;
+            }
+            else if (hasOrg)
+            {
+                if (string.IsNullOrWhiteSpace(dto.OrgRole))
+                    throw new ArgumentException("Organization role is required for org invites.");
+                if (!Enum.TryParse(dto.OrgRole, true, out OrgRole parsed))
+                    throw new ArgumentException("Invalid organization role.");
+                orgRole = parsed;
             }
 
             var token = GenerateToken();
             var expiresAt = DateTime.UtcNow.AddDays(dto.ExpiresInDays.GetValueOrDefault(7));
-            BoardRole? boardRole = null;
-
-            if (!string.IsNullOrWhiteSpace(dto.Role))
-            {
-                if (Enum.TryParse<BoardRole>(dto.Role, true, out var br))
-                    boardRole = br;
-                else
-                    throw new ArgumentException("Invalid role.");
-            }
 
             var invite = new Invite
             {
-                Id = Guid.Empty, // will be returned by repo
+                Id = Guid.Empty,
                 SenderId = senderId,
                 Email = email,
                 BoardId = dto.BoardId,
-                OrganizationId = dto.OrganizationId,
-                Role = boardRole,
+                OrgId = dto.OrganizationId,
+                BoardRole = boardRole,
+                OrgRole = orgRole,
                 Token = token,
                 Accepted = false,
                 ExpiresAt = expiresAt
@@ -88,7 +97,7 @@ namespace StickyBoard.Api.Services
         }
 
         // ------------------------------------------------------------
-        // PUBLIC LOOKUP FOR LANDING PAGE
+        // PUBLIC LOOKUP
         // ------------------------------------------------------------
         public async Task<InvitePublicDto?> GetPublicByTokenAsync(string token, CancellationToken ct)
         {
@@ -100,13 +109,13 @@ namespace StickyBoard.Api.Services
             {
                 Email = invite.Email,
                 BoardId = invite.BoardId,
-                OrganizationId = invite.OrganizationId,
-                Role = invite.Role?.ToString(),
+                OrganizationId = invite.OrgId,
+                BoardRole = invite.BoardRole?.ToString(),
+                OrgRole = invite.OrgRole?.ToString(),
                 ExpiresAt = invite.ExpiresAt,
                 Accepted = invite.Accepted,
                 SenderDisplayName = sender?.DisplayName ?? "Unknown"
             };
-            // (Do not expose sender email here)
         }
 
         // ------------------------------------------------------------
@@ -118,39 +127,32 @@ namespace StickyBoard.Api.Services
             if (invite is null || invite.Accepted || invite.ExpiresAt <= DateTime.UtcNow)
                 throw new InvalidOperationException("Invalid or expired invite.");
 
-            // Idempotency: user email must match invite email (if user exists)
-            var user = await _users.GetByIdAsync(userId, ct);
-            if (user == null) throw new InvalidOperationException("User not found.");
+            var user = await _users.GetByIdAsync(userId, ct)
+                       ?? throw new InvalidOperationException("User not found.");
+
             if (!string.Equals(user.Email?.Trim(), invite.Email?.Trim(), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Invite email does not match current user.");
 
-            // 1) Organization membership
-            if (invite.OrganizationId is not null)
+            if (invite.OrgId is not null)
             {
-                var role = invite.Role.HasValue ? (OrgRole)invite.Role.Value : OrgRole.member;
                 await _members.CreateAsync(new OrganizationMember
                 {
-                    OrganizationId = invite.OrganizationId.Value,
+                    OrganizationId = invite.OrgId.Value,
                     UserId = userId,
-                    Role = role
+                    Role = invite.OrgRole ?? OrgRole.member
                 }, ct);
             }
-
-            // 2) Board permission
-            if (invite.BoardId is not null)
+            else if (invite.BoardId is not null)
             {
                 await _permissions.CreateAsync(new Permission
                 {
                     UserId = userId,
                     BoardId = invite.BoardId.Value,
-                    Role = invite.Role ?? BoardRole.viewer
+                    Role = invite.BoardRole ?? BoardRole.viewer
                 }, ct);
             }
-
-            // 3) Friend relation (pure email invite)
-            if (invite.OrganizationId is null && invite.BoardId is null)
+            else
             {
-                // Two directional rows
                 await _relations.CreateAsync(new UserRelation
                 {
                     UserId = invite.SenderId,
@@ -166,7 +168,6 @@ namespace StickyBoard.Api.Services
                 }, ct);
             }
 
-            // Mark accepted
             invite.Accepted = true;
             await _invites.UpdateAsync(invite, ct);
 
@@ -180,29 +181,26 @@ namespace StickyBoard.Api.Services
         {
             var pending = await _invites.GetPendingBySenderAsync(senderId, ct);
             var sender = await _users.GetByIdAsync(senderId, ct);
-            var list = new List<InviteListItemDto>();
-            foreach (var i in pending)
+            return pending.Select(i => new InviteListItemDto
             {
-                list.Add(new InviteListItemDto
-                {
-                    Id = i.Id,
-                    Email = i.Email,
-                    BoardId = i.BoardId,
-                    OrganizationId = i.OrganizationId,
-                    Role = i.Role?.ToString(),
-                    Accepted = i.Accepted,
-                    CreatedAt = i.CreatedAt,
-                    ExpiresAt = i.ExpiresAt,
-                    SenderDisplayName = sender?.DisplayName ?? "You"
-                });
-            }
-            return list;
+                Id = i.Id,
+                Email = i.Email,
+                BoardId = i.BoardId,
+                OrganizationId = i.OrgId,
+                BoardRole = i.BoardRole?.ToString(),
+                OrgRole = i.OrgRole?.ToString(),
+                Accepted = i.Accepted,
+                CreatedAt = i.CreatedAt,
+                ExpiresAt = i.ExpiresAt,
+                SenderDisplayName = sender?.DisplayName ?? "You"
+            });
         }
 
         public async Task<IEnumerable<InviteListItemDto>> GetPendingForUserAsync(Guid userId, CancellationToken ct)
         {
-            var user = await _users.GetByIdAsync(userId, ct) 
+            var user = await _users.GetByIdAsync(userId, ct)
                        ?? throw new InvalidOperationException("User not found.");
+
             var items = await _invites.GetPendingForEmailAsync(user.Email.Trim().ToLowerInvariant(), ct);
             var list = new List<InviteListItemDto>();
 
@@ -214,25 +212,24 @@ namespace StickyBoard.Api.Services
                     Id = i.Id,
                     Email = i.Email,
                     BoardId = i.BoardId,
-                    OrganizationId = i.OrganizationId,
-                    Role = i.Role?.ToString(),
+                    OrganizationId = i.OrgId,
+                    BoardRole = i.BoardRole?.ToString(),
+                    OrgRole = i.OrgRole?.ToString(),
                     Accepted = i.Accepted,
                     CreatedAt = i.CreatedAt,
                     ExpiresAt = i.ExpiresAt,
                     SenderDisplayName = sender?.DisplayName ?? "Unknown"
                 });
             }
+
             return list;
         }
 
         // ------------------------------------------------------------
-        // CANCEL (sender-only)
+        // CANCEL
         // ------------------------------------------------------------
-        public async Task<bool> CancelAsync(Guid senderId, Guid inviteId, CancellationToken ct)
-        {
-            return await _invites.CancelIfOwnedAsync(senderId, inviteId, ct);
-        }
-
+        public Task<bool> CancelAsync(Guid senderId, Guid inviteId, CancellationToken ct)
+            => _invites.CancelIfOwnedAsync(senderId, inviteId, ct);
 
         // ------------------------------------------------------------
         // Helpers
@@ -241,13 +238,10 @@ namespace StickyBoard.Api.Services
         {
             Span<byte> bytes = stackalloc byte[32];
             RandomNumberGenerator.Fill(bytes);
-            return Base64UrlEncode(bytes);
-        }
-
-        private static string Base64UrlEncode(ReadOnlySpan<byte> bytes)
-        {
-            var s = Convert.ToBase64String(bytes);
-            return s.Replace("+", "-").Replace("/", "_").Replace("=", "");
+            return Convert.ToBase64String(bytes)
+                .Replace("+", "-")
+                .Replace("/", "_")
+                .Replace("=", "");
         }
     }
 }

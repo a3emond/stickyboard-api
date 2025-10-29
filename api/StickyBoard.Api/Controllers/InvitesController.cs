@@ -8,14 +8,16 @@ namespace StickyBoard.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // all endpoints require JWT
+    [Authorize] // all except /public require JWT
     public sealed class InvitesController : ControllerBase
     {
         private readonly InviteService _invites;
 
         public InvitesController(InviteService invites) => _invites = invites;
 
-        // AUTH: create invite
+        // ------------------------------------------------------------
+        // AUTH: Create invite
+        // ------------------------------------------------------------
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] InviteCreateDto dto, CancellationToken ct)
         {
@@ -26,7 +28,9 @@ namespace StickyBoard.Api.Controllers
             return Ok(res);
         }
 
-        // AUTH: redeem invite by token
+        // ------------------------------------------------------------
+        // AUTH: Redeem invite
+        // ------------------------------------------------------------
         [HttpPost("redeem")]
         public async Task<IActionResult> Redeem([FromBody] InviteRedeemRequestDto dto, CancellationToken ct)
         {
@@ -37,7 +41,9 @@ namespace StickyBoard.Api.Controllers
             return ok ? Ok(new { success = true }) : BadRequest();
         }
 
-        // AUTH: list pending invites addressed to me
+        // ------------------------------------------------------------
+        // AUTH: List invites addressed to me
+        // ------------------------------------------------------------
         [HttpGet("received")]
         public async Task<IActionResult> GetMyPending(CancellationToken ct)
         {
@@ -48,7 +54,9 @@ namespace StickyBoard.Api.Controllers
             return Ok(list);
         }
 
-        // AUTH: list invites I sent
+        // ------------------------------------------------------------
+        // AUTH: List invites I sent
+        // ------------------------------------------------------------
         [HttpGet("sent")]
         public async Task<IActionResult> GetSent(CancellationToken ct)
         {
@@ -59,7 +67,9 @@ namespace StickyBoard.Api.Controllers
             return Ok(list);
         }
 
-        // AUTH: cancel invite I sent (if not yet accepted)
+        // ------------------------------------------------------------
+        // AUTH: Cancel invite I sent (if still pending)
+        // ------------------------------------------------------------
         [HttpDelete("{inviteId:guid}")]
         public async Task<IActionResult> Cancel(Guid inviteId, CancellationToken ct)
         {
@@ -68,6 +78,18 @@ namespace StickyBoard.Api.Controllers
 
             var ok = await _invites.CancelAsync(senderId, inviteId, ct);
             return ok ? Ok(new { success = true }) : NotFound();
+        }
+
+        // ------------------------------------------------------------
+        // PUBLIC: Lookup invite by token (for landing page)
+        // ------------------------------------------------------------
+        [AllowAnonymous]
+        [HttpGet("public/{token}")]
+        public async Task<IActionResult> GetPublic(string token, CancellationToken ct)
+        {
+            var invite = await _invites.GetPublicByTokenAsync(token, ct);
+            if (invite is null) return NotFound();
+            return Ok(invite);
         }
     }
 }

@@ -10,23 +10,28 @@ namespace StickyBoard.Api.Services
     {
         private readonly ActivityRepository _activities;
         private readonly BoardRepository _boards;
+        private readonly CardRepository _cards;
         private readonly PermissionRepository _permissions;
 
         public ActivityService(
             ActivityRepository activities,
             BoardRepository boards,
+            CardRepository cards,
             PermissionRepository permissions)
         {
             _activities = activities;
             _boards = boards;
+            _cards = cards;
             _permissions = permissions;
         }
 
+        // ------------------------------------------------------------
+        // PERMISSION HELPERS
+        // ------------------------------------------------------------
         private async Task EnsureCanViewAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
-            var board = await _boards.GetByIdAsync(boardId, ct);
-            if (board is null)
-                throw new KeyNotFoundException("Board not found.");
+            var board = await _boards.GetByIdAsync(boardId, ct)
+                        ?? throw new KeyNotFoundException("Board not found.");
 
             var isOwner = board.OwnerId == userId;
             var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
@@ -38,7 +43,6 @@ namespace StickyBoard.Api.Services
         // ----------------------------------------------------------------------
         // READ
         // ----------------------------------------------------------------------
-
         public async Task<IEnumerable<Activity>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
@@ -47,21 +51,23 @@ namespace StickyBoard.Api.Services
 
         public async Task<IEnumerable<Activity>> GetByCardAsync(Guid userId, Guid cardId, CancellationToken ct)
         {
-            // Retrieve card to get boardId (optional: skip if not needed)
-            var activities = await _activities.GetByCardAsync(cardId, ct);
-            return activities;
+            // Get card to determine board context
+            var card = await _cards.GetByIdAsync(cardId, ct)
+                        ?? throw new KeyNotFoundException("Card not found.");
+
+            await EnsureCanViewAsync(userId, card.BoardId, ct);
+            return await _activities.GetByCardAsync(cardId, ct);
         }
 
         public async Task<IEnumerable<Activity>> GetRecentAsync(Guid userId, int limit, CancellationToken ct)
         {
-            // For admin/dashboard — no board restriction
+            // Optionally restrict to admin or same org in future
             return await _activities.GetRecentAsync(limit, ct);
         }
 
         // ----------------------------------------------------------------------
         // CREATE (append-only)
         // ----------------------------------------------------------------------
-
         public async Task<Guid> LogAsync(Guid actorId, CreateActivityDto dto, CancellationToken ct)
         {
             await EnsureCanViewAsync(actorId, dto.BoardId, ct);
@@ -83,7 +89,6 @@ namespace StickyBoard.Api.Services
         // ----------------------------------------------------------------------
         // ADMIN (optional)
         // ----------------------------------------------------------------------
-
         public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
             // For future admin cleanup

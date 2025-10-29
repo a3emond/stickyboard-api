@@ -7,7 +7,7 @@ using StickyBoard.Api.Models.Base;
 namespace StickyBoard.Api.Models.FilesAndOps
 {
     [Table("files")]
-    public class File : IEntity
+    public class File : IEntityUpdatable
     {
         [Key, Column("id")] public Guid Id { get; set; }
         [Column("owner_id")] public Guid OwnerId { get; set; }
@@ -19,5 +19,6 @@ namespace StickyBoard.Api.Models.FilesAndOps
         [Column("size_bytes")] public long? SizeBytes { get; set; }
         [Column("meta")] public JsonDocument Meta { get; set; } = JsonDocument.Parse("{}");
         [Column("created_at")] public DateTime CreatedAt { get; set; }
+        [Column("updated_at")] public DateTime UpdatedAt { get; set; }
     }
 }

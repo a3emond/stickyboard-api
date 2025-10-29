@@ -16,7 +16,7 @@ public class Message : IEntity
     [Column("type")] public MessageType Type { get; set; } = MessageType.direct;
     [Column("related_board")] public Guid? RelatedBoardId { get; set; }
     [Column("related_org")] public Guid? RelatedOrganizationId { get; set; }
-    [Column("status")] public string Status { get; set; } = "unread";
+    [Column("status")] public MessageStatus Status { get; set; } = MessageStatus.unread;
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 }
 
