@@ -1,12 +1,6 @@
 ﻿using StickyBoard.Api.DTOs.Permissions;
 using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Models.Boards;
-using StickyBoard.Api.Models.Enums;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace StickyBoard.Api.Services
 {
     public sealed class PermissionService
@@ -34,11 +28,17 @@ namespace StickyBoard.Api.Services
         // READ
         // ----------------------------------------------------------------------
 
-        public Task<IEnumerable<Permission>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
-            => _permissions.GetByBoardAsync(boardId, ct);
+        public async Task<IEnumerable<PermissionDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        {
+            var list = await _permissions.GetByBoardAsync(boardId, ct);
+            return list.Select(Map);
+        }
 
-        public Task<IEnumerable<Permission>> GetByUserAsync(Guid userId, CancellationToken ct)
-            => _permissions.GetByUserAsync(userId, ct);
+        public async Task<IEnumerable<PermissionDto>> GetByUserAsync(Guid userId, CancellationToken ct)
+        {
+            var list = await _permissions.GetByUserAsync(userId, ct);
+            return list.Select(Map);
+        }
 
         // ----------------------------------------------------------------------
         // CREATE / UPDATE / DELETE
@@ -78,5 +78,13 @@ namespace StickyBoard.Api.Services
             await EnsureOwnerAsync(actorId, boardId, ct);
             return await _permissions.DeleteAsync(boardId, userId, ct);
         }
+        
+        private static PermissionDto Map(Permission p) => new()
+        {
+            UserId = p.UserId,
+            BoardId = p.BoardId,
+            Role = p.Role,
+            GrantedAt = p.GrantedAt
+        };
     }
 }

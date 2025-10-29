@@ -1,11 +1,6 @@
 ﻿using StickyBoard.Api.DTOs.Messages;
 using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Models.Enums;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using StickyBoard.Api.Models.Messaging;
 
 namespace StickyBoard.Api.Services

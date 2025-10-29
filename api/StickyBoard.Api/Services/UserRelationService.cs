@@ -90,5 +90,15 @@ namespace StickyBoard.Api.Services
             var r2 = await _relations.GetAsync(b, a, ct);
             return r1?.Status == RelationStatus.active && r2?.Status == RelationStatus.active;
         }
+        
+        private static UserRelationResponseDto Map(UserRelation r) => new()
+        {
+            UserId = r.UserId,
+            FriendId = r.FriendId,
+            Status = r.Status.ToString(),
+            CreatedAt = r.CreatedAt,
+            UpdatedAt = r.UpdatedAt
+        };
+
     }
 }

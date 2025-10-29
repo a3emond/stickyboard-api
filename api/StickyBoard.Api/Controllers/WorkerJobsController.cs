@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
+using StickyBoard.Api.DTOs.Worker;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Services;
 
@@ -18,44 +21,54 @@ namespace StickyBoard.Api.Controllers
             _jobs = jobs;
         }
 
-        // Enqueue new job manually or via trigger
-        [HttpPost("{kind}")]
-        public async Task<IActionResult> Enqueue(JobKind kind, [FromBody] object payload, CancellationToken ct)
+        // ------------------------------------------------------------
+        // POST /api/workerjobs
+        // ------------------------------------------------------------
+        [HttpPost]
+        public async Task<ActionResult<ApiResponseDto<object>>> Enqueue([FromBody] EnqueueWorkerJobDto dto, CancellationToken ct)
         {
-            var id = await _jobs.EnqueueAsync(kind, payload, ct: ct);
-            return Ok(new { Id = id });
+            var id = await _jobs.EnqueueAsync(dto.Kind, dto.Payload, dto.Priority, dto.MaxAttempts, ct);
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
-        // List queued jobs
+        // ------------------------------------------------------------
+        // GET /api/workerjobs/queued
+        // ------------------------------------------------------------
         [HttpGet("queued")]
-        public async Task<IActionResult> GetQueued(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<WorkerJobDto>>>> GetQueued(CancellationToken ct)
         {
             var list = await _jobs.GetQueuedAsync(ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<WorkerJobDto>>.Ok(list));
         }
 
-        // List job attempts
+        // ------------------------------------------------------------
+        // GET /api/workerjobs/{jobId}/attempts
+        // ------------------------------------------------------------
         [HttpGet("{jobId:guid}/attempts")]
-        public async Task<IActionResult> GetAttempts(Guid jobId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<WorkerJobAttemptDto>>>> GetAttempts(Guid jobId, CancellationToken ct)
         {
             var list = await _jobs.GetAttemptsAsync(jobId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<WorkerJobAttemptDto>>.Ok(list));
         }
 
-        // List all deadletters
+        // ------------------------------------------------------------
+        // GET /api/workerjobs/deadletters
+        // ------------------------------------------------------------
         [HttpGet("deadletters")]
-        public async Task<IActionResult> GetDeadletters(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<WorkerJobDeadletterDto>>>> GetDeadletters(CancellationToken ct)
         {
             var list = await _jobs.GetDeadlettersAsync(ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<WorkerJobDeadletterDto>>.Ok(list));
         }
 
-        // Cleanup old jobs
+        // ------------------------------------------------------------
+        // DELETE /api/workerjobs/cleanup?retentionDays=30
+        // ------------------------------------------------------------
         [HttpDelete("cleanup")]
-        public async Task<IActionResult> Cleanup([FromQuery] int retentionDays = 30, CancellationToken ct = default)
+        public async Task<ActionResult<ApiResponseDto<object>>> Cleanup([FromQuery] int retentionDays = 30, CancellationToken ct = default)
         {
             var count = await _jobs.CleanupAsync(TimeSpan.FromDays(retentionDays), ct);
-            return Ok(new { Deleted = count });
+            return Ok(ApiResponseDto<object>.Ok(new { deleted = count }));
         }
     }
 }

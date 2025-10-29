@@ -19,6 +19,20 @@ namespace StickyBoard.Api.Swagger
             operation.Responses.TryAdd("403", new OpenApiResponse { Description = "Forbidden", Content = errorContent });
             operation.Responses.TryAdd("404", new OpenApiResponse { Description = "Not Found", Content = errorContent });
             operation.Responses.TryAdd("500", new OpenApiResponse { Description = "Internal Server Error", Content = errorContent });
+            
+            // Add a default 200 OK wrapper schema if none defined
+            if (!operation.Responses.ContainsKey("200"))
+            {
+                var genericSchema = context.SchemaGenerator.GenerateSchema(typeof(ApiResponseDto<object>), context.SchemaRepository);
+                operation.Responses.Add("200", new OpenApiResponse
+                {
+                    Description = "OK",
+                    Content = new Dictionary<string, OpenApiMediaType>
+                    {
+                        ["application/json"] = new OpenApiMediaType { Schema = genericSchema }
+                    }
+                });
+            }
         }
     }
 }

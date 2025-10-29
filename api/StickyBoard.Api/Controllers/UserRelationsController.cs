@@ -1,9 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
+using StickyBoard.Api.DTOs.Users;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Services;
-using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs.Users;
 
 namespace StickyBoard.Api.Controllers
 {
@@ -23,59 +24,65 @@ namespace StickyBoard.Api.Controllers
         // GET /api/userrelations
         // ------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> GetRelations(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<UserRelationDto>>>> GetRelations(CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<UserRelationDto>>.Fail("Invalid or missing token."));
 
             var list = await _relations.GetActiveAsync(userId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<UserRelationDto>>.Ok(list));
         }
 
         // ------------------------------------------------------------
         // POST /api/userrelations
         // ------------------------------------------------------------
         [HttpPost]
-        public async Task<IActionResult> CreateRelation([FromBody] UserRelationCreateDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> CreateRelation([FromBody] UserRelationCreateDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var success = await _relations.CreateAsync(userId, dto.FriendId, ct);
-            return success ? Ok(new { success = true }) : BadRequest("Could not create relation.");
+            return success
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : BadRequest(ApiResponseDto<object>.Fail("Could not create relation."));
         }
 
         // ------------------------------------------------------------
         // PUT /api/userrelations/{userId}/{friendId}
         // ------------------------------------------------------------
         [HttpPut("{userId:guid}/{friendId:guid}")]
-        public async Task<IActionResult> UpdateRelation(Guid userId, Guid friendId, [FromBody] UserRelationUpdateDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> UpdateRelation(Guid userId, Guid friendId, [FromBody] UserRelationUpdateDto dto, CancellationToken ct)
         {
             var callerId = User.GetUserId();
             if (callerId != userId)
                 return Forbid();
 
             if (!Enum.TryParse(dto.Status, true, out RelationStatus newStatus))
-                return BadRequest("Invalid relation status.");
+                return BadRequest(ApiResponseDto<object>.Fail("Invalid relation status."));
 
             var success = await _relations.UpdateAsync(userId, friendId, newStatus, ct);
-            return success ? Ok(new { success = true }) : NotFound();
+            return success
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Relation not found."));
         }
 
         // ------------------------------------------------------------
         // DELETE /api/userrelations/{userId}/{friendId}
         // ------------------------------------------------------------
         [HttpDelete("{userId:guid}/{friendId:guid}")]
-        public async Task<IActionResult> DeleteRelation(Guid userId, Guid friendId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> DeleteRelation(Guid userId, Guid friendId, CancellationToken ct)
         {
             var callerId = User.GetUserId();
             if (callerId != userId)
                 return Forbid();
 
             var success = await _relations.DeletePairAsync(userId, friendId, ct);
-            return success ? Ok(new { success = true }) : NotFound();
+            return success
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Relation not found."));
         }
     }
 }

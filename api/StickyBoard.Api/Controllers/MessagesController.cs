@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.DTOs.Messages;
 using StickyBoard.Api.Services;
-using StickyBoard.Api.Common;
 
 namespace StickyBoard.Api.Controllers
 {
@@ -18,58 +19,78 @@ namespace StickyBoard.Api.Controllers
             _service = service;
         }
 
+        // ------------------------------------------------------------
+        // INBOX
+        // ------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> Inbox(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<MessageDto>>>> Inbox(CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<MessageDto>>.Fail("Invalid or missing token."));
 
             var messages = await _service.GetInboxAsync(userId, ct);
-            return Ok(messages);
+            return Ok(ApiResponseDto<IEnumerable<MessageDto>>.Ok(messages));
         }
+
+        // ------------------------------------------------------------
+        // UNREAD COUNT
+        // ------------------------------------------------------------
         [HttpGet("unread-count")]
-        public async Task<IActionResult> UnreadCount(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> UnreadCount(CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var count = await _service.GetUnreadCountAsync(userId, ct);
-            return Ok(new { count });
+            return Ok(ApiResponseDto<object>.Ok(new { count }));
         }
 
+        // ------------------------------------------------------------
+        // SEND MESSAGE
+        // ------------------------------------------------------------
         [HttpPost]
-        public async Task<IActionResult> Send([FromBody] SendMessageDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Send([FromBody] SendMessageDto dto, CancellationToken ct)
         {
             var senderId = User.GetUserId();
             if (senderId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var id = await _service.SendAsync(senderId, dto, ct);
-            return Ok(new { id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
+        // ------------------------------------------------------------
+        // UPDATE STATUS
+        // ------------------------------------------------------------
         [HttpPut("{id:guid}/status")]
-        public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateMessageStatusDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> UpdateStatus(Guid id, [FromBody] UpdateMessageStatusDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.UpdateStatusAsync(userId, id, dto.Status, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Message not found or not accessible."));
         }
 
+        // ------------------------------------------------------------
+        // DELETE
+        // ------------------------------------------------------------
         [HttpDelete("{id:guid}")]
-        public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Delete(Guid id, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.DeleteAsync(userId, id, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Message not found or not accessible."));
         }
     }
 }

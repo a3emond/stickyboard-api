@@ -181,19 +181,8 @@ namespace StickyBoard.Api.Services
         {
             var pending = await _invites.GetPendingBySenderAsync(senderId, ct);
             var sender = await _users.GetByIdAsync(senderId, ct);
-            return pending.Select(i => new InviteListItemDto
-            {
-                Id = i.Id,
-                Email = i.Email,
-                BoardId = i.BoardId,
-                OrganizationId = i.OrgId,
-                BoardRole = i.BoardRole?.ToString(),
-                OrgRole = i.OrgRole?.ToString(),
-                Accepted = i.Accepted,
-                CreatedAt = i.CreatedAt,
-                ExpiresAt = i.ExpiresAt,
-                SenderDisplayName = sender?.DisplayName ?? "You"
-            });
+            var senderName = sender?.DisplayName ?? "You";
+            return pending.Select(i => MapListItem(i, senderName));
         }
 
         public async Task<IEnumerable<InviteListItemDto>> GetPendingForUserAsync(Guid userId, CancellationToken ct)
@@ -207,19 +196,7 @@ namespace StickyBoard.Api.Services
             foreach (var i in items)
             {
                 var sender = await _users.GetByIdAsync(i.SenderId, ct);
-                list.Add(new InviteListItemDto
-                {
-                    Id = i.Id,
-                    Email = i.Email,
-                    BoardId = i.BoardId,
-                    OrganizationId = i.OrgId,
-                    BoardRole = i.BoardRole?.ToString(),
-                    OrgRole = i.OrgRole?.ToString(),
-                    Accepted = i.Accepted,
-                    CreatedAt = i.CreatedAt,
-                    ExpiresAt = i.ExpiresAt,
-                    SenderDisplayName = sender?.DisplayName ?? "Unknown"
-                });
+                list.Add(MapListItem(i, sender?.DisplayName ?? "Unknown"));
             }
 
             return list;
@@ -243,5 +220,20 @@ namespace StickyBoard.Api.Services
                 .Replace("/", "_")
                 .Replace("=", "");
         }
+        // -------------------- Mapping --------------------
+        private static InviteListItemDto MapListItem(Invite i, string senderName) => new()
+        {
+            Id = i.Id,
+            Email = i.Email,
+            BoardId = i.BoardId,
+            OrganizationId = i.OrgId,
+            BoardRole = i.BoardRole?.ToString(),
+            OrgRole = i.OrgRole?.ToString(),
+            Accepted = i.Accepted,
+            CreatedAt = i.CreatedAt,
+            ExpiresAt = i.ExpiresAt,
+            SenderDisplayName = senderName
+        };
+
     }
 }

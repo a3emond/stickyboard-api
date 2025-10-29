@@ -46,5 +46,8 @@ namespace StickyBoard.Api.Models.FilesAndOps
 
         [Column("created_at")]
         public DateTime CreatedAt { get; init; }
+
+        [Column("processed")]
+        public bool Processed { get; init; }
     }
 }

@@ -1,7 +1,6 @@
 ﻿using StickyBoard.Api.DTOs.Sync;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Repositories;
-using StickyBoard.Api.Services;
 
 namespace StickyBoard.Api.Services
 {
@@ -51,7 +50,7 @@ namespace StickyBoard.Api.Services
                     Entity = op.Entity,
                     EntityId = op.EntityId,
                     OpType = op.OpType,
-                    PayloadJson = op.PayloadJson,
+                    PayloadJson = op.PayloadJson ?? "{}",
                     VersionPrev = op.VersionPrev,
                     VersionNext = op.VersionNext
                 }, ct);
@@ -59,8 +58,8 @@ namespace StickyBoard.Api.Services
                 accepted.Add(id);
             }
 
-            // enqueue background compaction job for this user/device
-            await _worker.EnqueueAsync(JobKind.SyncCompactor,
+            await _worker.EnqueueAsync(
+                JobKind.SyncCompactor,
                 new { DeviceId = dto.DeviceId, UserId = userId },
                 priority: 0, maxAttempts: 3, ct);
 
@@ -78,19 +77,16 @@ namespace StickyBoard.Api.Services
         public async Task<SyncPullResponseDto> PullAsync(Guid userId, DateTime since, CancellationToken ct)
         {
             var now = DateTime.UtcNow;
-
             var result = new SyncPullResponseDto { ServerTime = now };
 
-            // Fetch updated data per repository
-            result.Boards = (await _boards.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
-            result.Sections = (await _sections.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
-            result.Tabs = (await _tabs.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
-            result.Cards = (await _cards.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
-            result.Files = (await _files.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
-            result.Activities = (await _activities.GetUpdatedSinceAsync(since, ct)).Cast<object>().ToList();
+            result.Boards = (await _boards.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
+            result.Sections = (await _sections.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
+            result.Tabs = (await _tabs.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
+            result.Cards = (await _cards.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
+            result.Files = (await _files.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
+            result.Activities = (await _activities.GetUpdatedSinceAsync(since, ct))?.Cast<object>().ToList() ?? [];
 
             return result;
         }
-
     }
 }

@@ -74,19 +74,25 @@ namespace StickyBoard.Api.Services
         // ------------------------------------------------------------
         // QUERY
         // ------------------------------------------------------------
-        public async Task<IEnumerable<Operation>> QueryAsync(Guid userId, OperationQueryDto dto, CancellationToken ct)
+        public async Task<IEnumerable<OperationDto>> QueryAsync(Guid userId, OperationQueryDto dto, CancellationToken ct)
         {
+            IEnumerable<Operation> ops;
+
             if (!string.IsNullOrWhiteSpace(dto.DeviceId))
-                return await _operations.GetByDeviceAsync(Guid.TryParse(dto.DeviceId, out var devGuid) ? devGuid : Guid.Empty, ct);
+            {
+                if (Guid.TryParse(dto.DeviceId, out var devGuid))
+                    ops = await _operations.GetByDeviceAsync(devGuid, ct);
+                else
+                    ops = [];
+            }
+            else if (dto.Since.HasValue)
+                ops = await _operations.GetSinceAsync(dto.Since.Value, ct);
+            else if (dto.UserId.HasValue)
+                ops = await _operations.GetByUserAsync(dto.UserId.Value, ct);
+            else
+                ops = await _operations.GetByUserAsync(userId, ct);
 
-            if (dto.Since.HasValue)
-                return await _operations.GetSinceAsync(dto.Since.Value, ct);
-
-            if (dto.UserId.HasValue)
-                return await _operations.GetByUserAsync(dto.UserId.Value, ct);
-
-            // Default fallback: current user's recent operations
-            return await _operations.GetByUserAsync(userId, ct);
+            return ops.Select(Map);
         }
 
         // ------------------------------------------------------------
@@ -104,5 +110,20 @@ namespace StickyBoard.Api.Services
                 ProcessedCount = 0
             };
         }
+        
+        private static OperationDto Map(Operation o) => new()
+        {
+            Id = o.Id,
+            DeviceId = o.DeviceId,
+            UserId = o.UserId,
+            Entity = o.Entity,
+            EntityId = o.EntityId,
+            OpType = o.OpType,
+            PayloadJson = o.Payload?.RootElement.GetRawText() ?? "{}",
+            VersionPrev = o.VersionPrev,
+            VersionNext = o.VersionNext,
+            CreatedAt = o.CreatedAt,
+            Processed = o.Processed
+        };
     }
 }

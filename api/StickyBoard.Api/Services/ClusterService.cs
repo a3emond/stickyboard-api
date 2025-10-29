@@ -36,11 +36,13 @@ namespace StickyBoard.Api.Services
         // READ
         // ----------------------------------------------------------------------
 
-        public async Task<IEnumerable<Cluster>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        public async Task<IEnumerable<ClusterDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
-            return await _clusters.GetByBoardAsync(boardId, ct);
+            var clusters = await _clusters.GetByBoardAsync(boardId, ct);
+            return clusters.Select(Map);
         }
+        
 
         // ----------------------------------------------------------------------
         // CREATE / UPDATE / DELETE
@@ -91,5 +93,16 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, existing.BoardId, ct);
             return await _clusters.DeleteAsync(clusterId, ct);
         }
+        
+        private static ClusterDto Map(Cluster c) => new()
+        {
+            Id = c.Id,
+            BoardId = c.BoardId,
+            ClusterType = c.ClusterType,
+            RuleDefJson = c.RuleDef?.RootElement.ToString(),
+            VisualMetaJson = c.VisualMeta?.RootElement.ToString() ?? "{}",
+            CreatedAt = c.CreatedAt,
+            UpdatedAt = c.UpdatedAt
+        };
     }
 }

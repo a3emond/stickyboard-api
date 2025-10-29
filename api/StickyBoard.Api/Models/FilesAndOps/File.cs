@@ -16,7 +16,7 @@ namespace StickyBoard.Api.Models.FilesAndOps
         [Column("storage_key")] public string StorageKey { get; set; } = string.Empty;
         [Column("filename")] public string FileName { get; set; } = string.Empty;
         [Column("mime_type")] public string? MimeType { get; set; }
-        [Column("size_bytes")] public long? SizeBytes { get; set; }
+        [Column("size_bytes")] public long SizeBytes { get; set; }
         [Column("meta")] public JsonDocument Meta { get; set; } = JsonDocument.Parse("{}");
         [Column("created_at")] public DateTime CreatedAt { get; set; }
         [Column("updated_at")] public DateTime UpdatedAt { get; set; }

@@ -20,36 +20,37 @@ namespace StickyBoard.Api.Repositories.FilesAndOps
             await using var cmd = new NpgsqlCommand(@"
                 INSERT INTO operations (
                     device_id, user_id, entity, entity_id,
-                    op_type, payload, version_prev, version_next
+                    op_type, payload, version_prev, version_next, processed
                 )
                 VALUES (
                     @device, @user, @entity, @eid,
-                    @type, @payload, @vp, @vn
+                    @type, @payload, @vp, @vn, @processed
                 )
                 RETURNING id", conn);
 
             cmd.Parameters.AddWithValue("device", e.DeviceId);
             cmd.Parameters.AddWithValue("user", e.UserId);
-            cmd.Parameters.AddWithValue("entity", e.Entity.ToString().ToLower()); // enum -> lowercase
+            cmd.Parameters.AddWithValue("entity", e.Entity.ToString().ToLower());
             cmd.Parameters.AddWithValue("eid", (object?)e.EntityId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("type", e.OpType);
             cmd.Parameters.AddWithValue("payload", e.Payload.RootElement.GetRawText());
             cmd.Parameters.AddWithValue("vp", (object?)e.VersionPrev ?? DBNull.Value);
             cmd.Parameters.AddWithValue("vn", (object?)e.VersionNext ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("processed", e.Processed);
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
 
         public override Task<bool> UpdateAsync(Operation e, CancellationToken ct)
         {
-            // Operations are immutable
+            // Operations are immutable except for 'processed' updates
             return Task.FromResult(false);
         }
 
         public override async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
-            await using var cmd = new NpgsqlCommand("DELETE FROM operations WHERE id=@id", conn);
+            await using var cmd = new NpgsqlCommand("DELETE FROM operations WHERE id = @id", conn);
             cmd.Parameters.AddWithValue("id", id);
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
@@ -57,7 +58,6 @@ namespace StickyBoard.Api.Repositories.FilesAndOps
         // ----------------------------------------------------------------------
         // ADDITIONAL QUERIES
         // ----------------------------------------------------------------------
-
         public async Task<IEnumerable<Operation>> GetByUserAsync(Guid userId, CancellationToken ct)
         {
             var list = new List<Operation>();
@@ -126,8 +126,7 @@ namespace StickyBoard.Api.Repositories.FilesAndOps
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
                 UPDATE operations
-                SET processed = TRUE,
-                    processed_at = now()
+                SET processed = TRUE
                 WHERE id = @id", conn);
 
             cmd.Parameters.AddWithValue("id", id);

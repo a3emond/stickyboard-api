@@ -36,23 +36,41 @@ namespace StickyBoard.Api.Services
         // READ
         // ----------------------------------------------------------------------
 
-        public Task<IEnumerable<Card>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
-            => _cards.GetByBoardAsync(boardId, ct);
+        public async Task<IEnumerable<CardDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        {
+            var cards = await _cards.GetByBoardAsync(boardId, ct);
+            return cards.Select(Map);
+        }
 
-        public Task<IEnumerable<Card>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
-            => _cards.GetBySectionAsync(sectionId, ct);
+        public async Task<IEnumerable<CardDto>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
+        {
+            var cards = await _cards.GetBySectionAsync(sectionId, ct);
+            return cards.Select(Map);
+        }
 
-        public Task<IEnumerable<Card>> GetByTabAsync(Guid userId, Guid tabId, CancellationToken ct)
-            => _cards.GetByTabAsync(tabId, ct);
+        public async Task<IEnumerable<CardDto>> GetByTabAsync(Guid userId, Guid tabId, CancellationToken ct)
+        {
+            var cards = await _cards.GetByTabAsync(tabId, ct);
+            return cards.Select(Map);
+        }
 
-        public Task<IEnumerable<Card>> GetByAssigneeAsync(Guid userId, CancellationToken ct)
-            => _cards.GetByAssigneeAsync(userId, ct);
+        public async Task<IEnumerable<CardDto>> GetByAssigneeAsync(Guid userId, CancellationToken ct)
+        {
+            var cards = await _cards.GetByAssigneeAsync(userId, ct);
+            return cards.Select(Map);
+        }
 
-        public Task<IEnumerable<Card>> SearchAsync(Guid userId, Guid boardId, string keyword, CancellationToken ct)
-            => _cards.SearchAsync(boardId, keyword, ct);
+        public async Task<IEnumerable<CardDto>> SearchAsync(Guid userId, Guid boardId, string keyword, CancellationToken ct)
+        {
+            var cards = await _cards.SearchAsync(boardId, keyword, ct);
+            return cards.Select(Map);
+        }
 
-        public Task<IEnumerable<Card>> GetByStatusAsync(Guid userId, Guid boardId, CardStatus status, CancellationToken ct)
-            => _cards.GetByStatusAsync(boardId, status.ToString(), ct);
+        public async Task<IEnumerable<CardDto>> GetByStatusAsync(Guid userId, Guid boardId, CardStatus status, CancellationToken ct)
+        {
+            var cards = await _cards.GetByStatusAsync(boardId, status.ToString(), ct);
+            return cards.Select(Map);
+        }
 
         // ----------------------------------------------------------------------
         // CREATE / UPDATE / DELETE
@@ -130,5 +148,29 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, boardId, ct);
             return await _cards.BulkAssignUserAsync(boardId, assigneeId, cardIds, ct);
         }
+        
+        
+        private static CardDto Map(Card c) => new()
+        {
+            Id = c.Id,
+            BoardId = c.BoardId,
+            SectionId = c.SectionId,
+            TabId = c.TabId,
+            Type = c.Type,
+            Title = c.Title,
+            ContentJson = c.Content?.RootElement.ToString() ?? "{}",
+            InkDataJson = c.InkData?.RootElement.ToString(),
+            DueDate = c.DueDate,
+            StartTime = c.StartTime,
+            EndTime = c.EndTime,
+            Priority = c.Priority,
+            Status = c.Status,
+            AssigneeId = c.AssigneeId,
+            CreatedBy = c.CreatedBy,
+            Version = c.Version,
+            CreatedAt = c.CreatedAt,
+            UpdatedAt = c.UpdatedAt
+        };
+
     }
 }

@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.DTOs.Permissions;
 using StickyBoard.Api.Services;
-using StickyBoard.Api.Common;
 
 namespace StickyBoard.Api.Controllers
 {
@@ -18,63 +19,65 @@ namespace StickyBoard.Api.Controllers
             _service = service;
         }
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         // READ
-        // ----------------------------------------------------------------------
-
+        // ------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> GetByBoard(Guid boardId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<PermissionDto>>>> GetByBoard(Guid boardId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<PermissionDto>>.Fail("Invalid or missing token."));
 
             var list = await _service.GetByBoardAsync(userId, boardId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<PermissionDto>>.Ok(list));
         }
 
         [HttpGet("~/api/users/{userId:guid}/boards")]
-        public async Task<IActionResult> GetByUser(Guid userId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<PermissionDto>>>> GetByUser(Guid userId, CancellationToken ct)
         {
             var list = await _service.GetByUserAsync(userId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<PermissionDto>>.Ok(list));
         }
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
-
+        // ------------------------------------------------------------
         [HttpPost]
-        public async Task<IActionResult> Add(Guid boardId, [FromBody] GrantPermissionDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Add(Guid boardId, [FromBody] GrantPermissionDto dto, CancellationToken ct)
         {
             var actorId = User.GetUserId();
             if (actorId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var id = await _service.AddAsync(actorId, boardId, dto, ct);
-            return Ok(new { boardId = id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
         [HttpPut("{userId:guid}")]
-        public async Task<IActionResult> Update(Guid boardId, Guid userId, [FromBody] UpdatePermissionDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Update(Guid boardId, Guid userId, [FromBody] UpdatePermissionDto dto, CancellationToken ct)
         {
             var actorId = User.GetUserId();
             if (actorId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.UpdateAsync(actorId, boardId, userId, dto, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Permission not found."));
         }
 
         [HttpDelete("{userId:guid}")]
-        public async Task<IActionResult> Remove(Guid boardId, Guid userId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Remove(Guid boardId, Guid userId, CancellationToken ct)
         {
             var actorId = User.GetUserId();
             if (actorId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.RemoveAsync(actorId, boardId, userId, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Permission not found."));
         }
     }
 }

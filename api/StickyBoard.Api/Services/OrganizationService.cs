@@ -81,10 +81,11 @@ namespace StickyBoard.Api.Services
         // MEMBERS
         // ----------------------------------------------------------------------
 
-        public async Task<IEnumerable<OrganizationMember>> GetMembersAsync(Guid userId, Guid orgId, CancellationToken ct)
+        public async Task<IEnumerable<OrganizationMemberDto>> GetMembersAsync(Guid userId, Guid orgId, CancellationToken ct)
         {
             await EnsureOwnerAsync(userId, orgId, ct);
-            return await _members.GetByOrganizationAsync(orgId, ct);
+            var list = await _members.GetByOrganizationAsync(orgId, ct);
+            return list.Select(MapMember);
         }
 
         public async Task<Guid> AddMemberAsync(Guid actorId, Guid orgId, AddMemberDto dto, CancellationToken ct)
@@ -120,5 +121,22 @@ namespace StickyBoard.Api.Services
             await EnsureOwnerAsync(actorId, orgId, ct);
             return await _members.RemoveMemberAsync(orgId, memberId, ct);
         }
+        
+        private static OrganizationDto Map(Organization o) => new()
+        {
+            Id = o.Id,
+            Name = o.Name,
+            OwnerId = o.OwnerId,
+            CreatedAt = o.CreatedAt,
+            UpdatedAt = o.UpdatedAt
+        };
+        
+        private static OrganizationMemberDto MapMember(OrganizationMember m) => new()
+        {
+            OrganizationId = m.OrganizationId,
+            UserId = m.UserId,
+            Role = m.Role,
+            JoinedAt = m.JoinedAt
+        };
     }
 }

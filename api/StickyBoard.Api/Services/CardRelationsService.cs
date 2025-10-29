@@ -47,11 +47,17 @@ namespace StickyBoard.Api.Services
         // TAGS
         // ----------------------------------------------------------------------
 
-        public async Task<IEnumerable<Tag>> GetTagsAsync(CancellationToken ct)
-            => await _tags.GetAllAsync(ct);
+        public async Task<IEnumerable<TagDto>> GetTagsAsync(CancellationToken ct)
+        {
+            var tags = await _tags.GetAllAsync(ct);
+            return tags.Select(Map);
+        }
 
-        public async Task<IEnumerable<Tag>> SearchTagsAsync(string query, CancellationToken ct)
-            => await _tags.SearchAsync(query, ct);
+        public async Task<IEnumerable<TagDto>> SearchTagsAsync(string query, CancellationToken ct)
+        {
+            var tags = await _tags.SearchAsync(query, ct);
+            return tags.Select(Map);
+        }
 
         public async Task<Guid> CreateTagAsync(CreateTagDto dto, CancellationToken ct)
         {
@@ -59,17 +65,16 @@ namespace StickyBoard.Api.Services
             return await _tags.CreateAsync(tag, ct);
         }
 
-        public async Task<IEnumerable<Tag>> GetTagsForCardAsync(Guid cardId, CancellationToken ct)
+        public async Task<IEnumerable<TagDto>> GetTagsForCardAsync(Guid cardId, CancellationToken ct)
         {
             var cardTags = await _cardTags.GetByCardAsync(cardId, ct);
             var tagIds = cardTags.Select(ctg => ctg.TagId);
             if (!tagIds.Any()) return [];
-
-            var tags = new List<Tag>();
+            var tags = new List<TagDto>();
             foreach (var id in tagIds)
             {
                 var t = await _tags.GetByIdAsync(id, ct);
-                if (t != null) tags.Add(t);
+                if (t != null) tags.Add(Map(t));
             }
             return tags;
         }
@@ -104,11 +109,17 @@ namespace StickyBoard.Api.Services
         // LINKS
         // ----------------------------------------------------------------------
 
-        public async Task<IEnumerable<Link>> GetLinksFromAsync(Guid cardId, CancellationToken ct)
-            => await _links.GetLinksFromAsync(cardId, ct);
+        public async Task<IEnumerable<LinkDto>> GetLinksFromAsync(Guid cardId, CancellationToken ct)
+        {
+            var links = await _links.GetLinksFromAsync(cardId, ct);
+            return links.Select(Map);
+        }
 
-        public async Task<IEnumerable<Link>> GetLinksToAsync(Guid cardId, CancellationToken ct)
-            => await _links.GetLinksToAsync(cardId, ct);
+        public async Task<IEnumerable<LinkDto>> GetLinksToAsync(Guid cardId, CancellationToken ct)
+        {
+            var links = await _links.GetLinksToAsync(cardId, ct);
+            return links.Select(Map);
+        }
 
         public async Task<Guid> CreateLinkAsync(Guid userId, Guid fromCard, CreateLinkDto dto, CancellationToken ct)
         {
@@ -158,5 +169,17 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, fromCard.BoardId, ct);
             return await _links.DeleteAsync(linkId, ct);
         }
+        
+        
+        private static TagDto Map(Tag t) => new() { Id = t.Id, Name = t.Name };
+        private static LinkDto Map(Link l) => new()
+        {
+            Id = l.Id,
+            FromCard = l.FromCard,
+            ToCard = l.ToCard,
+            RelType = l.RelType,
+            CreatedBy = l.CreatedBy,
+            CreatedAt = l.CreatedAt
+        };
     }
 }

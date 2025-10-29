@@ -1,14 +1,16 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.DTOs.Auth;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Users;
 
 namespace StickyBoard.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    public sealed class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
 
@@ -22,10 +24,10 @@ namespace StickyBoard.Api.Controllers
         // ------------------------------------------------------------------
         [HttpPost("register")]
         [AllowAnonymous]
-        public async Task<IActionResult> Register([FromBody] RegisterRequestDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<AuthResponseDto>>> Register([FromBody] RegisterRequestDto dto, CancellationToken ct)
         {
             var result = await _authService.RegisterAsync(dto, ct);
-            return Ok(result);
+            return Ok(ApiResponseDto<AuthResponseDto>.Ok(result));
         }
 
         // ------------------------------------------------------------------
@@ -33,10 +35,10 @@ namespace StickyBoard.Api.Controllers
         // ------------------------------------------------------------------
         [HttpPost("login")]
         [AllowAnonymous]
-        public async Task<IActionResult> Login([FromBody] LoginRequestDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<AuthResponseDto>>> Login([FromBody] LoginRequestDto dto, CancellationToken ct)
         {
             var result = await _authService.LoginAsync(dto, ct);
-            return Ok(result);
+            return Ok(ApiResponseDto<AuthResponseDto>.Ok(result));
         }
 
         // ------------------------------------------------------------------
@@ -44,10 +46,10 @@ namespace StickyBoard.Api.Controllers
         // ------------------------------------------------------------------
         [HttpPost("refresh")]
         [AllowAnonymous]
-        public async Task<IActionResult> Refresh([FromBody] RefreshRequestDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<AuthResponseDto>>> Refresh([FromBody] RefreshRequestDto dto, CancellationToken ct)
         {
             var result = await _authService.RefreshAsync(dto.UserId, dto.RefreshToken, ct);
-            return Ok(result);
+            return Ok(ApiResponseDto<AuthResponseDto>.Ok(result));
         }
 
         // ------------------------------------------------------------------
@@ -55,14 +57,14 @@ namespace StickyBoard.Api.Controllers
         // ------------------------------------------------------------------
         [HttpPost("logout")]
         [Authorize]
-        public async Task<IActionResult> Logout(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Logout(CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             await _authService.LogoutAsync(userId, ct);
-            return Ok(new { success = true });
+            return Ok(ApiResponseDto<object>.Ok(new { success = true }));
         }
 
         // ------------------------------------------------------------------
@@ -70,14 +72,17 @@ namespace StickyBoard.Api.Controllers
         // ------------------------------------------------------------------
         [HttpGet("me")]
         [Authorize]
-        public async Task<IActionResult> Me(CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<UserDto>>> Me(CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<UserDto>.Fail("Invalid or missing token."));
 
             var me = await _authService.GetMeAsync(userId, ct);
-            return me is null ? NotFound() : Ok(me);
+            if (me is null)
+                return NotFound(ApiResponseDto<UserDto>.Fail("User not found."));
+
+            return Ok(ApiResponseDto<UserDto>.Ok(me));
         }
     }
 }

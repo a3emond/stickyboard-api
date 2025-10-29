@@ -32,14 +32,14 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to modify this board.");
         }
 
-        public async Task<IEnumerable<Section>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        public async Task<IEnumerable<SectionDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
-            // View permission can be relaxed (owner, editor, viewer)
             var board = await _boards.GetByIdAsync(boardId, ct);
             if (board is null)
                 throw new KeyNotFoundException("Board not found.");
 
-            return await _sections.GetByBoardAsync(boardId, ct);
+            var sections = await _sections.GetByBoardAsync(boardId, ct);
+            return sections.Select(Map);
         }
 
         public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateSectionDto dto, CancellationToken ct)
@@ -92,5 +92,16 @@ namespace StickyBoard.Api.Services
             var mapped = updates.Select(u => (u.Id, u.Position));
             return await _sections.ReorderAsync(boardId, mapped, ct);
         }
+        
+        private static SectionDto Map(Section s) => new()
+        {
+            Id = s.Id,
+            BoardId = s.BoardId,
+            Title = s.Title,
+            Position = s.Position,
+            LayoutMeta = s.LayoutMeta?.RootElement.GetRawText() ?? "{}",
+            CreatedAt = s.CreatedAt,
+            UpdatedAt = s.UpdatedAt
+        };
     }
 }

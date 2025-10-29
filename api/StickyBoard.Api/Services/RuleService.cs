@@ -36,10 +36,11 @@ namespace StickyBoard.Api.Services
         // READ
         // ----------------------------------------------------------------------
 
-        public async Task<IEnumerable<Rule>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        public async Task<IEnumerable<RuleDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
-            return await _rules.GetByBoardAsync(boardId, ct);
+            var list = await _rules.GetByBoardAsync(boardId, ct);
+            return list.Select(Map);
         }
 
         // ----------------------------------------------------------------------
@@ -87,5 +88,15 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, existing.BoardId, ct);
             return await _rules.DeleteAsync(ruleId, ct);
         }
+        
+        private static RuleDto Map(Rule r) => new()
+        {
+            Id = r.Id,
+            BoardId = r.BoardId,
+            DefinitionJson = r.Definition?.RootElement.GetRawText() ?? "{}",
+            Enabled = r.Enabled,
+            CreatedAt = r.CreatedAt,
+            UpdatedAt = r.UpdatedAt
+        };
     }
 }

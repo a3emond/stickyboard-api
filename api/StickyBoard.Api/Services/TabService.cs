@@ -56,19 +56,21 @@ namespace StickyBoard.Api.Services
         // ----------------------------------------------------------------------
         // READ
         // ----------------------------------------------------------------------
-        public async Task<IEnumerable<Tab>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        public async Task<IEnumerable<TabDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
-            return await _tabs.GetByBoardAsync(boardId, ct);
+            var tabs = await _tabs.GetByBoardAsync(boardId, ct);
+            return tabs.Select(Map);
         }
 
-        public async Task<IEnumerable<Tab>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
+        public async Task<IEnumerable<TabDto>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
         {
             var section = await _sections.GetByIdAsync(sectionId, ct)
                           ?? throw new KeyNotFoundException("Section not found.");
 
             await EnsureCanViewAsync(userId, section.BoardId, ct);
-            return await _tabs.GetBySectionAsync(sectionId, ct);
+            var tabs = await _tabs.GetBySectionAsync(sectionId, ct);
+            return tabs.Select(Map);
         }
 
         // ----------------------------------------------------------------------
@@ -149,5 +151,19 @@ namespace StickyBoard.Api.Services
 
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
+        
+        private static TabDto Map(Tab t) => new()
+        {
+            Id = t.Id,
+            Scope = t.Scope,
+            BoardId = t.BoardId,
+            SectionId = t.SectionId,
+            Title = t.Title,
+            TabType = t.TabType,
+            LayoutConfig = t.LayoutConfig?.RootElement.GetRawText() ?? "{}",
+            Position = t.Position,
+            CreatedAt = t.CreatedAt,
+            UpdatedAt = t.UpdatedAt
+        };
     }
 }

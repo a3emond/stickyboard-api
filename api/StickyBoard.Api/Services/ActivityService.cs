@@ -40,34 +40,50 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to view this board's activities.");
         }
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
+        // MAPPING
+        // ------------------------------------------------------------
+        private static ActivityDto Map(Activity a) => new()
+        {
+            Id = a.Id,
+            BoardId = a.BoardId,
+            CardId = a.CardId,
+            ActorId = a.ActorId,
+            ActType = a.ActType,
+            PayloadJson = a.Payload?.RootElement.ToString() ?? "{}",
+            CreatedAt = a.CreatedAt
+        };
+
+        // ------------------------------------------------------------
         // READ
-        // ----------------------------------------------------------------------
-        public async Task<IEnumerable<Activity>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        // ------------------------------------------------------------
+        public async Task<IEnumerable<ActivityDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
-            return await _activities.GetByBoardAsync(boardId, ct);
+            var entities = await _activities.GetByBoardAsync(boardId, ct);
+            return entities.Select(Map);
         }
 
-        public async Task<IEnumerable<Activity>> GetByCardAsync(Guid userId, Guid cardId, CancellationToken ct)
+        public async Task<IEnumerable<ActivityDto>> GetByCardAsync(Guid userId, Guid cardId, CancellationToken ct)
         {
-            // Get card to determine board context
             var card = await _cards.GetByIdAsync(cardId, ct)
                         ?? throw new KeyNotFoundException("Card not found.");
 
             await EnsureCanViewAsync(userId, card.BoardId, ct);
-            return await _activities.GetByCardAsync(cardId, ct);
+            var entities = await _activities.GetByCardAsync(cardId, ct);
+            return entities.Select(Map);
         }
 
-        public async Task<IEnumerable<Activity>> GetRecentAsync(Guid userId, int limit, CancellationToken ct)
+        public async Task<IEnumerable<ActivityDto>> GetRecentAsync(Guid userId, int limit, CancellationToken ct)
         {
             // Optionally restrict to admin or same org in future
-            return await _activities.GetRecentAsync(limit, ct);
+            var entities = await _activities.GetRecentAsync(limit, ct);
+            return entities.Select(Map);
         }
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         // CREATE (append-only)
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         public async Task<Guid> LogAsync(Guid actorId, CreateActivityDto dto, CancellationToken ct)
         {
             await EnsureCanViewAsync(actorId, dto.BoardId, ct);
@@ -86,9 +102,9 @@ namespace StickyBoard.Api.Services
             return await _activities.CreateAsync(entity, ct);
         }
 
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         // ADMIN (optional)
-        // ----------------------------------------------------------------------
+        // ------------------------------------------------------------
         public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
             // For future admin cleanup

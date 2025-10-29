@@ -1,13 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.DTOs.Cards;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Common;
 using StickyBoard.Api.Models.Enums;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace StickyBoard.Api.Controllers
 {
@@ -28,65 +25,65 @@ namespace StickyBoard.Api.Controllers
         // ----------------------------------------------------------------------
 
         [HttpGet("board/{boardId:guid}")]
-        public async Task<IActionResult> GetByBoard(Guid boardId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetByBoard(Guid boardId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<CardDto>>.Fail("Invalid or missing token."));
 
             var cards = await _service.GetByBoardAsync(userId, boardId, ct);
-            return Ok(cards);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(cards));
         }
 
         [HttpGet("section/{sectionId:guid}")]
-        public async Task<IActionResult> GetBySection(Guid sectionId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetBySection(Guid sectionId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<CardDto>>.Fail("Invalid or missing token."));
 
             var cards = await _service.GetBySectionAsync(userId, sectionId, ct);
-            return Ok(cards);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(cards));
         }
 
         [HttpGet("tab/{tabId:guid}")]
-        public async Task<IActionResult> GetByTab(Guid tabId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetByTab(Guid tabId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<CardDto>>.Fail("Invalid or missing token."));
 
             var cards = await _service.GetByTabAsync(userId, tabId, ct);
-            return Ok(cards);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(cards));
         }
 
         [HttpGet("assignee/{userId:guid}")]
-        public async Task<IActionResult> GetByAssignee(Guid userId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetByAssignee(Guid userId, CancellationToken ct)
         {
             var cards = await _service.GetByAssigneeAsync(userId, ct);
-            return Ok(cards);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(cards));
         }
 
         [HttpGet("board/{boardId:guid}/search")]
-        public async Task<IActionResult> Search(Guid boardId, [FromQuery] string q, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> Search(Guid boardId, [FromQuery] string q, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<CardDto>>.Fail("Invalid or missing token."));
 
             var results = await _service.SearchAsync(userId, boardId, q, ct);
-            return Ok(results);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(results));
         }
 
         [HttpGet("board/{boardId:guid}/status/{status}")]
-        public async Task<IActionResult> GetByStatus(Guid boardId, CardStatus status, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetByStatus(Guid boardId, CardStatus status, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<CardDto>>.Fail("Invalid or missing token."));
 
             var results = await _service.GetByStatusAsync(userId, boardId, status, ct);
-            return Ok(results);
+            return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(results));
         }
 
         // ----------------------------------------------------------------------
@@ -94,36 +91,40 @@ namespace StickyBoard.Api.Controllers
         // ----------------------------------------------------------------------
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateCardDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Create([FromBody] CreateCardDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var id = await _service.CreateAsync(userId, dto, ct);
-            return Ok(new { id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
         [HttpPut("{id:guid}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCardDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Update(Guid id, [FromBody] UpdateCardDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.UpdateAsync(userId, id, dto, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Card not found."));
         }
 
         [HttpDelete("{id:guid}")]
-        public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Delete(Guid id, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var ok = await _service.DeleteAsync(userId, id, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok
+                ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Card not found."));
         }
 
         // ----------------------------------------------------------------------
@@ -131,14 +132,14 @@ namespace StickyBoard.Api.Controllers
         // ----------------------------------------------------------------------
 
         [HttpPost("board/{boardId:guid}/assign")]
-        public async Task<IActionResult> BulkAssign(Guid boardId, [FromBody] BulkAssignDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> BulkAssign(Guid boardId, [FromBody] BulkAssignDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var count = await _service.BulkAssignAsync(userId, boardId, dto.AssigneeId, dto.CardIds, ct);
-            return Ok(new { updated = count });
+            return Ok(ApiResponseDto<object>.Ok(new { updated = count }));
         }
     }
 }

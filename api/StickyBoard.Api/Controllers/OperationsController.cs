@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.DTOs.Operations;
 using StickyBoard.Api.Services;
 
@@ -8,7 +9,7 @@ namespace StickyBoard.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize] // All endpoints require authentication
+    [Authorize]
     public sealed class OperationsController : ControllerBase
     {
         private readonly OperationService _operations;
@@ -19,42 +20,44 @@ namespace StickyBoard.Api.Controllers
         }
 
         // ------------------------------------------------------------
-        // APPEND (log or sync operation)
+        // APPEND
         // ------------------------------------------------------------
         [HttpPost]
-        public async Task<IActionResult> Append([FromBody] CreateOperationDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Append([FromBody] CreateOperationDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             var id = await _operations.AppendAsync(userId, dto, ct);
-            return Ok(new { Id = id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
         // ------------------------------------------------------------
-        // QUERY (get operations by device, user, or since timestamp)
+        // QUERY
         // ------------------------------------------------------------
         [HttpGet]
-        public async Task<IActionResult> Query([FromQuery] OperationQueryDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<OperationDto>>>> Query([FromQuery] OperationQueryDto dto, CancellationToken ct)
         {
             var userId = User.GetUserId();
             if (userId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<IEnumerable<OperationDto>>.Fail("Invalid or missing token."));
 
             var list = await _operations.QueryAsync(userId, dto, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<OperationDto>>.Ok(list));
         }
 
         // ------------------------------------------------------------
-        // MAINTENANCE (admin/worker cleanup endpoint)
+        // MAINTENANCE
         // ------------------------------------------------------------
         [Authorize(Roles = "admin")]
         [HttpPost("maintenance")]
-        public async Task<IActionResult> Maintenance([FromQuery] int retentionDays = 30, CancellationToken ct = default)
+        public async Task<ActionResult<ApiResponseDto<OperationMaintenanceResultDto>>> Maintenance(
+            [FromQuery] int retentionDays = 30,
+            CancellationToken ct = default)
         {
             var result = await _operations.MaintenanceAsync(TimeSpan.FromDays(retentionDays), ct);
-            return Ok(result);
+            return Ok(ApiResponseDto<OperationMaintenanceResultDto>.Ok(result));
         }
     }
 }

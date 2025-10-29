@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.DTOs.Activities;
+using StickyBoard.Api.DTOs.Common;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Common;
 
@@ -23,28 +24,28 @@ namespace StickyBoard.Api.Controllers
         // ----------------------------------------------------------------------
 
         [HttpGet]
-        public async Task<IActionResult> GetByBoard(Guid boardId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<ActivityDto>>>> GetByBoard(Guid boardId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             var list = await _service.GetByBoardAsync(userId, boardId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<ActivityDto>>.Ok(list));
         }
 
         [HttpGet("cards/{cardId:guid}")]
-        public async Task<IActionResult> GetByCard(Guid boardId, Guid cardId, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<ActivityDto>>>> GetByCard(Guid boardId, Guid cardId, CancellationToken ct)
         {
             var userId = User.GetUserId();
             var list = await _service.GetByCardAsync(userId, cardId, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<ActivityDto>>.Ok(list));
         }
 
         [HttpGet("~/api/activities/recent")]
         [Authorize(Roles = "admin")]
-        public async Task<IActionResult> GetRecent([FromQuery] int limit = 20, CancellationToken ct = default)
+        public async Task<ActionResult<ApiResponseDto<IEnumerable<ActivityDto>>>> GetRecent([FromQuery] int limit = 20, CancellationToken ct = default)
         {
             var userId = User.GetUserId();
             var list = await _service.GetRecentAsync(userId, limit, ct);
-            return Ok(list);
+            return Ok(ApiResponseDto<IEnumerable<ActivityDto>>.Ok(list));
         }
 
         // ----------------------------------------------------------------------
@@ -52,15 +53,15 @@ namespace StickyBoard.Api.Controllers
         // ----------------------------------------------------------------------
 
         [HttpPost]
-        public async Task<IActionResult> Log(Guid boardId, [FromBody] CreateActivityDto dto, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Log(Guid boardId, [FromBody] CreateActivityDto dto, CancellationToken ct)
         {
             var actorId = User.GetUserId();
             if (actorId == Guid.Empty)
-                return Unauthorized();
+                return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
             dto.BoardId = boardId;
             var id = await _service.LogAsync(actorId, dto, ct);
-            return Ok(new { id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
         // ----------------------------------------------------------------------
@@ -69,10 +70,13 @@ namespace StickyBoard.Api.Controllers
 
         [HttpDelete("{id:guid}")]
         [Authorize(Roles = "admin")]
-        public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+        public async Task<ActionResult<ApiResponseDto<object>>> Delete(Guid id, CancellationToken ct)
         {
             var ok = await _service.DeleteAsync(id, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            if (!ok)
+                return NotFound(ApiResponseDto<object>.Fail("Activity not found."));
+
+            return Ok(ApiResponseDto<object>.Ok(new { deleted = true }));
         }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.DTOs.Boards;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.Common;
 
 
 namespace StickyBoard.Api.Controllers
@@ -27,7 +28,7 @@ namespace StickyBoard.Api.Controllers
                 return Unauthorized();
 
             var boards = await _service.GetMineAsync(userId, ct);
-            return Ok(boards);
+            return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(boards));
         }
 
         [HttpGet("accessible")]
@@ -38,7 +39,7 @@ namespace StickyBoard.Api.Controllers
                 return Unauthorized();
 
             var boards = await _service.GetAccessibleAsync(userId, ct);
-            return Ok(boards);
+            return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(boards));
         }
 
         [HttpPost]
@@ -49,7 +50,7 @@ namespace StickyBoard.Api.Controllers
                 return Unauthorized();
 
             var id = await _service.CreateAsync(userId, dto, ct);
-            return Ok(new { id });
+            return Ok(ApiResponseDto<object>.Ok(new { id }));
         }
 
         [HttpPut("{id:guid}")]
@@ -60,7 +61,8 @@ namespace StickyBoard.Api.Controllers
                 return Unauthorized();
 
             var ok = await _service.UpdateAsync(userId, id, dto, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Board not found."));
         }
 
         [HttpDelete("{id:guid}")]
@@ -71,7 +73,8 @@ namespace StickyBoard.Api.Controllers
                 return Unauthorized();
 
             var ok = await _service.DeleteAsync(userId, id, ct);
-            return ok ? Ok(new { success = true }) : NotFound();
+            return ok ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+                : NotFound(ApiResponseDto<object>.Fail("Board not found."));
         }
     }
 }

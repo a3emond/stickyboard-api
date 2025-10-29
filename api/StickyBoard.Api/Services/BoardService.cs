@@ -76,10 +76,30 @@ namespace StickyBoard.Api.Services
             return await _boards.DeleteAsync(boardId, ct);
         }
 
-        public Task<IEnumerable<Board>> GetMineAsync(Guid ownerId, CancellationToken ct)
-            => _boards.GetByOwnerAsync(ownerId, ct);
+        public async Task<IEnumerable<BoardDto>> GetMineAsync(Guid ownerId, CancellationToken ct)
+        {
+            var boards = await _boards.GetByOwnerAsync(ownerId, ct);
+            return boards.Select(Map);
+        }
 
-        public Task<IEnumerable<Board>> GetAccessibleAsync(Guid userId, CancellationToken ct)
-            => _boards.GetAccessibleForUserAsync(userId, ct);
+        public async Task<IEnumerable<BoardDto>> GetAccessibleAsync(Guid userId, CancellationToken ct)
+        {
+            var boards = await _boards.GetAccessibleForUserAsync(userId, ct);
+            return boards.Select(Map);
+        }
+        
+        private static BoardDto Map(Board b) => new()
+        {
+            Id = b.Id,
+            OwnerId = b.OwnerId,
+            OrganizationId = b.OrganizationId,
+            ParentBoardId = b.ParentBoardId,
+            Title = b.Title,
+            Visibility = b.Visibility,
+            ThemeJson = b.Theme?.RootElement.ToString() ?? "{}",
+            RulesJson = b.Rules?.RootElement.ToString() ?? "[]",
+            CreatedAt = b.CreatedAt,
+            UpdatedAt = b.UpdatedAt
+        };
     }
 }

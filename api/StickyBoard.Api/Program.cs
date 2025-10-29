@@ -180,8 +180,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "StickyBoard API",
-        Version = "v1",
+        Title = "StickyBoard API", Version = "v1",
         Description = "REST API for StickyBoard cross-platform workspace (Academic Project)",
         Contact = new OpenApiContact
         {
@@ -212,6 +211,7 @@ builder.Services.AddSwaggerGen(options =>
         { jwtSecurityScheme, Array.Empty<string>() }
     });
     options.OperationFilter<StickyBoard.Api.Swagger.DefaultResponsesOperationFilter>();
+    options.OperationFilter<StickyBoard.Api.Common.Filters.ForceJsonContentTypeFilter>();
 
 });
 
@@ -224,7 +224,7 @@ var app = builder.Build();
 // 6. OPTIONAL CACHE-BUSTING + SWAGGER SETUP
 // ==========================================================
 
-app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseMiddleware<ErrorHandlingMiddleware>(); // Global error handling
 
 app.Use(async (context, next) =>
 {

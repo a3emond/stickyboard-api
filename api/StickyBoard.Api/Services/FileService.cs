@@ -96,21 +96,23 @@ namespace StickyBoard.Api.Services
         // ------------------------------------------------------------
         // READ
         // ------------------------------------------------------------
-        public async Task<IEnumerable<File>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
+        public async Task<IEnumerable<FileDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
-            return await _files.GetByBoardAsync(boardId, ct);
+            var list = await _files.GetByBoardAsync(boardId, ct);
+            return list.Select(Map);
         }
 
-        public async Task<IEnumerable<File>> GetByCardAsync(Guid userId, Guid cardId, CancellationToken ct)
+        public async Task<IEnumerable<FileDto>> GetByCardAsync(Guid userId, Guid cardId, CancellationToken ct)
         {
             var card = await _cards.GetByIdAsync(cardId, ct)
-                        ?? throw new KeyNotFoundException("Card not found.");
+                       ?? throw new KeyNotFoundException("Card not found.");
             await EnsureCanViewAsync(userId, card.BoardId, ct);
-            return await _files.GetByCardAsync(cardId, ct);
+            var list = await _files.GetByCardAsync(cardId, ct);
+            return list.Select(Map);
         }
 
-        public async Task<File?> GetAsync(Guid userId, Guid fileId, CancellationToken ct)
+        public async Task<FileDto?> GetAsync(Guid userId, Guid fileId, CancellationToken ct)
         {
             var file = await _files.GetByIdAsync(fileId, ct);
             if (file is null)
@@ -118,8 +120,7 @@ namespace StickyBoard.Api.Services
 
             var boardId = await ResolveBoardIdAsync(file.BoardId, file.CardId, ct);
             await EnsureCanViewAsync(userId, boardId, ct);
-
-            return file;
+            return Map(file);
         }
 
         // ------------------------------------------------------------
@@ -136,5 +137,20 @@ namespace StickyBoard.Api.Services
 
             return await _files.DeleteAsync(fileId, ct);
         }
+        
+        private static FileDto Map(File f) => new()
+        {
+            Id = f.Id,
+            OwnerId = f.OwnerId,
+            BoardId = f.BoardId,
+            CardId = f.CardId,
+            StorageKey = f.StorageKey,
+            FileName = f.FileName,
+            MimeType = f.MimeType,
+            SizeBytes = f.SizeBytes,
+            MetaJson = f.Meta?.RootElement.ToString(),
+            CreatedAt = f.CreatedAt,
+            UpdatedAt = f.UpdatedAt
+        };
     }
 }
