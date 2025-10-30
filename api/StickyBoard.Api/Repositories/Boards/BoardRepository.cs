@@ -30,8 +30,14 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("parent", (object?)e.ParentBoardId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("title", e.Title);
             cmd.Parameters.AddWithValue("vis", e.Visibility);
-            cmd.Parameters.AddWithValue("theme", e.Theme);
-            cmd.Parameters.AddWithValue("rules", e.Rules);
+
+            // jsonb fields
+            cmd.Parameters.AddWithValue("theme", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                e.Theme?.RootElement.GetRawText() ?? "{}");
+
+            cmd.Parameters.AddWithValue("rules", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                e.Rules?.RootElement.GetRawText() ?? "[]");
+
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
@@ -54,8 +60,14 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("org", (object?)e.OrganizationId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("parent", (object?)e.ParentBoardId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("vis", e.Visibility);
-            cmd.Parameters.AddWithValue("theme", e.Theme);
-            cmd.Parameters.AddWithValue("rules", e.Rules);
+
+            // jsonb fields
+            cmd.Parameters.AddWithValue("theme", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                e.Theme?.RootElement.GetRawText() ?? "{}");
+
+            cmd.Parameters.AddWithValue("rules", NpgsqlTypes.NpgsqlDbType.Jsonb,
+                e.Rules?.RootElement.GetRawText() ?? "[]");
+
             cmd.Parameters.AddWithValue("id", e.Id);
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;

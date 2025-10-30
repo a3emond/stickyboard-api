@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using StickyBoard.Api.Models.Enums;
 
 namespace StickyBoard.Api.DTOs.Cards
@@ -11,8 +12,8 @@ namespace StickyBoard.Api.DTOs.Cards
         public Guid? TabId { get; set; }
         public CardType Type { get; set; } = CardType.note;
         public string? Title { get; set; }
-        public string ContentJson { get; set; } = "{}";
-        public string? InkDataJson { get; set; }
+        public Dictionary<string, object>? ContentJson { get; set; }
+        public Dictionary<string, object>? InkDataJson { get; set; }
         public DateTime? DueDate { get; set; }
         public DateTime? StartTime { get; set; }
         public DateTime? EndTime { get; set; }
@@ -32,8 +33,8 @@ namespace StickyBoard.Api.DTOs.Cards
         public Guid? TabId { get; set; }
         public CardType Type { get; set; } = CardType.note;
         public string? Title { get; set; }
-        public string? ContentJson { get; set; }
-        public string? InkDataJson { get; set; }
+        public Dictionary<string, object>? ContentJson { get; set; }
+        public Dictionary<string, object>? InkDataJson { get; set; }
         public DateTime? DueDate { get; set; }
         public DateTime? StartTime { get; set; }
         public DateTime? EndTime { get; set; }
@@ -45,8 +46,8 @@ namespace StickyBoard.Api.DTOs.Cards
         public Guid? SectionId { get; set; }
         public Guid? TabId { get; set; }
         public string? Title { get; set; }
-        public string? ContentJson { get; set; }
-        public string? InkDataJson { get; set; }
+        public Dictionary<string, object>? ContentJson { get; set; }
+        public Dictionary<string, object>? InkDataJson { get; set; }
         public DateTime? DueDate { get; set; }
         public DateTime? StartTime { get; set; }
         public DateTime? EndTime { get; set; }

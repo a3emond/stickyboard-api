@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.Worker;
 using StickyBoard.Api.Repositories.Base;
 
@@ -24,8 +25,8 @@ namespace StickyBoard.Api.Repositories
                 RETURNING id", conn);
 
             cmd.Parameters.AddWithValue("jid", (object?)e.JobId ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("kind", e.JobKind.ToString());
-            cmd.Parameters.AddWithValue("payload", e.Payload.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("kind", e.JobKind);
+            cmd.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, e.Payload.RootElement.GetRawText());
             cmd.Parameters.AddWithValue("a", e.Attempts);
             cmd.Parameters.AddWithValue("err", (object?)e.LastError ?? DBNull.Value);
 

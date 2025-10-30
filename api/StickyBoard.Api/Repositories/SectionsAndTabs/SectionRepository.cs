@@ -1,6 +1,7 @@
 ﻿using Npgsql;
 using StickyBoard.Api.Models.SectionsAndTabs;
 using StickyBoard.Api.Repositories.Base;
+using NpgsqlTypes;
 
 namespace StickyBoard.Api.Repositories
 {
@@ -10,10 +11,6 @@ namespace StickyBoard.Api.Repositories
 
         protected override Section Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Section>(reader);
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
 
         public override async Task<Guid> CreateAsync(Section e, CancellationToken ct)
         {
@@ -26,7 +23,7 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("board", e.BoardId);
             cmd.Parameters.AddWithValue("title", e.Title);
             cmd.Parameters.AddWithValue("pos", e.Position);
-            cmd.Parameters.AddWithValue("meta", e.LayoutMeta.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("meta", NpgsqlDbType.Jsonb, e.LayoutMeta.RootElement.GetRawText());
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
@@ -45,7 +42,7 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("id", e.Id);
             cmd.Parameters.AddWithValue("title", e.Title);
             cmd.Parameters.AddWithValue("pos", e.Position);
-            cmd.Parameters.AddWithValue("meta", e.LayoutMeta.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("meta", NpgsqlDbType.Jsonb, e.LayoutMeta.RootElement.GetRawText());
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
@@ -58,11 +55,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // ----------------------------------------------------------------------
-        // ADDITIONAL QUERIES
-        // ----------------------------------------------------------------------
-
-        // Retrieve all sections for a specific board
         public async Task<IEnumerable<Section>> GetByBoardAsync(Guid boardId, CancellationToken ct)
         {
             var list = new List<Section>();
@@ -81,7 +73,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve section by title (useful for imports / matching)
         public async Task<Section?> GetByTitleAsync(Guid boardId, string title, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -98,7 +89,6 @@ namespace StickyBoard.Api.Repositories
             return await reader.ReadAsync(ct) ? Map(reader) : null;
         }
 
-        // Bulk reorder sections for a given board
         public async Task<int> ReorderAsync(Guid boardId, IEnumerable<(Guid Id, int Position)> positions, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -124,7 +114,6 @@ namespace StickyBoard.Api.Repositories
             return totalUpdated;
         }
 
-        // Delete all sections belonging to a given board (used for board reset)
         public async Task<int> DeleteByBoardAsync(Guid boardId, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);

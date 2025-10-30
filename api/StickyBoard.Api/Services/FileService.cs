@@ -26,9 +26,6 @@ namespace StickyBoard.Api.Services
             _permissions = permissions;
         }
 
-        // ------------------------------------------------------------
-        // PERMISSION HELPERS
-        // ------------------------------------------------------------
         private async Task EnsureCanEditAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             var board = await _boards.GetByIdAsync(boardId, ct)
@@ -38,7 +35,7 @@ namespace StickyBoard.Api.Services
             var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
 
             if (!(isOwner || role is BoardRole.owner or BoardRole.editor))
-                throw new UnauthorizedAccessException("User not allowed to modify files on this board.");
+                throw new UnauthorizedAccessException("User not allowed to modify files.");
         }
 
         private async Task EnsureCanViewAsync(Guid userId, Guid boardId, CancellationToken ct)
@@ -50,13 +47,12 @@ namespace StickyBoard.Api.Services
             var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
 
             if (!(isOwner || role is BoardRole.owner or BoardRole.editor or BoardRole.viewer))
-                throw new UnauthorizedAccessException("User not allowed to view files on this board.");
+                throw new UnauthorizedAccessException("User not allowed to view files.");
         }
 
         private async Task<Guid> ResolveBoardIdAsync(Guid? boardId, Guid? cardId, CancellationToken ct)
         {
-            if (boardId.HasValue)
-                return boardId.Value;
+            if (boardId.HasValue) return boardId.Value;
 
             if (cardId.HasValue)
             {
@@ -68,9 +64,6 @@ namespace StickyBoard.Api.Services
             throw new ArgumentException("Either BoardId or CardId must be provided.");
         }
 
-        // ------------------------------------------------------------
-        // CREATE
-        // ------------------------------------------------------------
         public async Task<Guid> CreateAsync(Guid ownerId, CreateFileDto dto, CancellationToken ct)
         {
             var boardId = await ResolveBoardIdAsync(dto.BoardId, dto.CardId, ct);
@@ -85,7 +78,7 @@ namespace StickyBoard.Api.Services
                 FileName = dto.FileName,
                 MimeType = dto.MimeType,
                 SizeBytes = dto.SizeBytes,
-                Meta = JsonDocument.Parse(dto.MetaJson ?? "{}"),
+                Meta = JsonSerializer.SerializeToDocument(dto.Meta ?? new Dictionary<string, object>()),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -93,9 +86,6 @@ namespace StickyBoard.Api.Services
             return await _files.CreateAsync(entity, ct);
         }
 
-        // ------------------------------------------------------------
-        // READ
-        // ------------------------------------------------------------
         public async Task<IEnumerable<FileDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
@@ -107,6 +97,7 @@ namespace StickyBoard.Api.Services
         {
             var card = await _cards.GetByIdAsync(cardId, ct)
                        ?? throw new KeyNotFoundException("Card not found.");
+
             await EnsureCanViewAsync(userId, card.BoardId, ct);
             var list = await _files.GetByCardAsync(cardId, ct);
             return list.Select(Map);
@@ -115,29 +106,25 @@ namespace StickyBoard.Api.Services
         public async Task<FileDto?> GetAsync(Guid userId, Guid fileId, CancellationToken ct)
         {
             var file = await _files.GetByIdAsync(fileId, ct);
-            if (file is null)
-                return null;
+            if (file is null) return null;
 
             var boardId = await ResolveBoardIdAsync(file.BoardId, file.CardId, ct);
             await EnsureCanViewAsync(userId, boardId, ct);
+
             return Map(file);
         }
 
-        // ------------------------------------------------------------
-        // DELETE
-        // ------------------------------------------------------------
         public async Task<bool> DeleteAsync(Guid userId, Guid fileId, CancellationToken ct)
         {
             var file = await _files.GetByIdAsync(fileId, ct);
-            if (file is null)
-                return false;
+            if (file is null) return false;
 
             var boardId = await ResolveBoardIdAsync(file.BoardId, file.CardId, ct);
             await EnsureCanEditAsync(userId, boardId, ct);
 
             return await _files.DeleteAsync(fileId, ct);
         }
-        
+
         private static FileDto Map(File f) => new()
         {
             Id = f.Id,
@@ -148,7 +135,7 @@ namespace StickyBoard.Api.Services
             FileName = f.FileName,
             MimeType = f.MimeType,
             SizeBytes = f.SizeBytes,
-            MetaJson = f.Meta?.RootElement.ToString(),
+            Meta = f.Meta?.Deserialize<Dictionary<string, object>>(),
             CreatedAt = f.CreatedAt,
             UpdatedAt = f.UpdatedAt
         };

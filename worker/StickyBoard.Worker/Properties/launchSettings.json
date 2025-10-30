@@ -1,0 +1,19 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "StickyBoard.Worker": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "",
+      "environmentVariables": {
+        "DB_HOST": "localhost",
+        "POSTGRES_USER": "stickyadmin",
+        "POSTGRES_PASSWORD": "strongpassword",
+        "POSTGRES_DB": "stickyboard",
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "WORKER_API_KEY": "O9Iu8+iqHLDbmxhKDv9Yu0/0RhlGAnkTQ/3N9SJCYn0="
+      }
+    }
+  }
+}

@@ -13,7 +13,7 @@
         "POSTGRES_DB": "stickyboard",
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_URLS": "http://+:5000",
-        "WORKER_API_KEY": "O9Iu8+iqHLDbmxhKDv9Yu0/0RhlGAnkTQ/3N9SJCYn0="
+        "WORKER_API_KEY": "smq0SQEG68AC6Kwgytc0d6Thbg78ydqap3WLov1nuA4"
       }
     },
     "https": {
@@ -28,7 +28,7 @@
         "POSTGRES_DB": "stickyboard",
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_URLS": "https://+:5001",
-        "WORKER_API_KEY": "O9Iu8+iqHLDbmxhKDv9Yu0/0RhlGAnkTQ/3N9SJCYn0="
+        "WORKER_API_KEY": "smq0SQEG68AC6Kwgytc0d6Thbg78ydqap3WLov1nuA4"
         
       }
     }

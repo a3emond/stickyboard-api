@@ -22,14 +22,22 @@ namespace StickyBoard.Api.Auth
 
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            if (!Request.Headers.TryGetValue("X-Worker-Key", out var providedKey))
+            // Try both Authorization and X-Worker-Key
+            if (!Request.Headers.TryGetValue("Authorization", out var header) &&
+                !Request.Headers.TryGetValue("X-Worker-Key", out header))
+            {
                 return Task.FromResult(AuthenticateResult.NoResult());
+            }
 
-            var configuredKey = _config["WORKER_API_KEY"];
-            if (string.IsNullOrWhiteSpace(configuredKey))
+            var provided = header.ToString().Trim();
+            if (provided.StartsWith("ApiKey ", StringComparison.OrdinalIgnoreCase))
+                provided = provided.Substring("ApiKey ".Length).Trim();
+
+            var configured = _config["WORKER_API_KEY"];
+            if (string.IsNullOrWhiteSpace(configured))
                 return Task.FromResult(AuthenticateResult.Fail("No worker key configured."));
 
-            if (!configuredKey.Equals(providedKey))
+            if (!configured.Equals(provided))
                 return Task.FromResult(AuthenticateResult.Fail("Invalid worker key."));
 
             var claims = new[]
@@ -43,5 +51,6 @@ namespace StickyBoard.Api.Auth
 
             return Task.FromResult(AuthenticateResult.Success(ticket));
         }
+
     }
 }

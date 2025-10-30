@@ -1,12 +1,8 @@
 ﻿using StickyBoard.Api.DTOs.Boards;
 using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Models.Enums;
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using StickyBoard.Api.Models.Boards;
+using System.Text.Json;
 
 namespace StickyBoard.Api.Services
 {
@@ -30,8 +26,11 @@ namespace StickyBoard.Api.Services
                 ParentBoardId = dto.ParentBoardId,
                 Title = dto.Title,
                 Visibility = dto.Visibility,
-                Theme = JsonDocument.Parse(dto.ThemeJson ?? "{}"),
-                Rules = JsonDocument.Parse(dto.RulesJson ?? "[]"),
+
+                // Convert dictionaries → JsonDocument
+                Theme = JsonSerializer.SerializeToDocument(dto.Theme ?? new Dictionary<string, object>()),
+                Rules = JsonSerializer.SerializeToDocument(dto.Rules ?? new List<Dictionary<string, object>>()),
+
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -55,10 +54,13 @@ namespace StickyBoard.Api.Services
             board.OrganizationId = dto.OrganizationId ?? board.OrganizationId;
             board.ParentBoardId = dto.ParentBoardId ?? board.ParentBoardId;
             board.Visibility = dto.Visibility ?? board.Visibility;
-            if (dto.ThemeJson is not null)
-                board.Theme = JsonDocument.Parse(dto.ThemeJson);
-            if (dto.RulesJson is not null)
-                board.Rules = JsonDocument.Parse(dto.RulesJson);
+
+            // null means "don't touch", not "reset"
+            if (dto.Theme != null)
+                board.Theme = JsonSerializer.SerializeToDocument(dto.Theme);
+
+            if (dto.Rules != null)
+                board.Rules = JsonSerializer.SerializeToDocument(dto.Rules);
 
             board.UpdatedAt = DateTime.UtcNow;
             return await _boards.UpdateAsync(board, ct);
@@ -87,7 +89,7 @@ namespace StickyBoard.Api.Services
             var boards = await _boards.GetAccessibleForUserAsync(userId, ct);
             return boards.Select(Map);
         }
-        
+
         private static BoardDto Map(Board b) => new()
         {
             Id = b.Id,
@@ -96,8 +98,11 @@ namespace StickyBoard.Api.Services
             ParentBoardId = b.ParentBoardId,
             Title = b.Title,
             Visibility = b.Visibility,
-            ThemeJson = b.Theme?.RootElement.ToString() ?? "{}",
-            RulesJson = b.Rules?.RootElement.ToString() ?? "[]",
+            
+            // Convert JsonDocument → Dictionary/list
+            Theme = b.Theme.Deserialize<Dictionary<string, object>>()!,
+            Rules = b.Rules.Deserialize<List<Dictionary<string, object>>>()!,
+            
             CreatedAt = b.CreatedAt,
             UpdatedAt = b.UpdatedAt
         };

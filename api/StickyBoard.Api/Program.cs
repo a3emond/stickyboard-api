@@ -12,6 +12,7 @@ using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Services;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Repositories.FilesAndOps;
+using StickyBoard.Api.Repositories.SectionsAndTabs;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -24,44 +25,44 @@ var dbUser = configuration["POSTGRES_USER"];
 var dbPass = configuration["POSTGRES_PASSWORD"];
 var dbName = configuration["POSTGRES_DB"];
 
-var connectionString =
-    configuration["DATABASE_URL"]
-    ?? $"Host={dbHost};Database={dbName};Username={dbUser};Password={dbPass}";
+string connectionString;
 
-// Create DataSourceBuilder and register all PostgreSQL ENUM mappings
+var dbUrl = configuration["DATABASE_URL"];
+if (!string.IsNullOrEmpty(dbUrl) && dbUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
+{
+    var uri = new Uri(dbUrl);
+    var userInfo = uri.UserInfo.Split(':');
+    var user = userInfo.Length > 0 ? userInfo[0] : string.Empty;
+    var pass = userInfo.Length > 1 ? userInfo[1] : string.Empty;
+    var host = uri.Host;
+    var port = uri.Port > 0 ? uri.Port : 5432;
+    var database = uri.AbsolutePath.TrimStart('/');
+
+    connectionString = $"Host={host};Port={port};Database={database};Username={user};Password={pass};SSL Mode=Prefer;Trust Server Certificate=true";
+}
+else
+{
+    connectionString = $"Host={dbHost};Database={dbName};Username={dbUser};Password={dbPass};SSL Mode=Prefer;Trust Server Certificate=true";
+}
+
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-
-// --- User & Authorization
 dataSourceBuilder.MapEnum<UserRole>("user_role");
 dataSourceBuilder.MapEnum<BoardRole>("board_role");
 dataSourceBuilder.MapEnum<OrgRole>("org_role");
-
-// --- Visibility & Structure
 dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
 dataSourceBuilder.MapEnum<TabScope>("tab_scope");
-
-// --- Cards, Links & Clusters
 dataSourceBuilder.MapEnum<CardType>("card_type");
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
 dataSourceBuilder.MapEnum<LinkType>("link_type");
 dataSourceBuilder.MapEnum<ClusterType>("cluster_type");
-
-// --- Activity & Entity Types
 dataSourceBuilder.MapEnum<ActivityType>("activity_type");
 dataSourceBuilder.MapEnum<EntityType>("entity_type");
-
-// --- Worker / Job Queue
 dataSourceBuilder.MapEnum<JobKind>("job_kind");
 dataSourceBuilder.MapEnum<JobStatus>("job_status");
-
-// --- Messaging & Social
 dataSourceBuilder.MapEnum<MessageType>("message_type");
 dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
 
-// Build the Npgsql DataSource
 var dataSource = dataSourceBuilder.Build();
-
-// Register in DI
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 
@@ -127,69 +128,65 @@ builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<OperationRepository>();
 builder.Services.AddScoped<OperationService>();
 
-
-// --- Background Worker (Job Queue)
+// --- Worker / Job Queue
 builder.Services.AddScoped<WorkerJobRepository>();
 builder.Services.AddScoped<WorkerJobAttemptRepository>();
 builder.Services.AddScoped<WorkerJobDeadletterRepository>();
 builder.Services.AddScoped<WorkerJobService>();
 builder.Services.AddScoped<SyncService>();
 
-
-
 // ==========================================================
-// 3. AUTHENTICATION & AUTHORIZATION (JWT Configuration)
+// 3. AUTHENTICATION & AUTHORIZATION (JWT + API KEY)
 // ==========================================================
 var jwtSection = configuration.GetSection("Jwt");
 var jwt = jwtSection.Get<JwtOptions>() ?? throw new Exception("JWT configuration missing.");
 builder.Services.Configure<JwtOptions>(jwtSection);
 
 builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateIssuerSigningKey = true,
-            ValidateLifetime = true, // Enforce token expiry
-            ValidIssuer = jwt.Issuer,
-            ValidAudience = jwt.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
-            ClockSkew = TimeSpan.FromSeconds(30)
-        };
-    })
-    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>("ApiKey", null);
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwt.Issuer,
+        ValidAudience = jwt.Audience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
+        ClockSkew = TimeSpan.FromSeconds(30)
+    };
+})
+.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthHandler>("ApiKey", null);
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", p => p.RequireRole("admin"));
+    options.AddPolicy("WorkerOrAdmin", policy =>
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme, "ApiKey")
+              .RequireAuthenticatedUser()
+              .RequireRole("worker", "admin"));
 });
 
 // ==========================================================
 // 4. CONTROLLERS + SWAGGER CONFIGURATION
 // ==========================================================
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "StickyBoard API", Version = "v1",
         Description = "REST API for StickyBoard cross-platform workspace (Academic Project)",
-        Contact = new OpenApiContact
-        {
-            Name = "Alexandre Emond",
-            Url = new Uri("https://aedev.pro")
-        }
+        Contact = new OpenApiContact { Name = "Alexandre Emond", Url = new Uri("https://aedev.pro") }
     });
 
-    // JWT Auth in Swagger
+    // JWT
     var jwtSecurityScheme = new OpenApiSecurityScheme
     {
         Scheme = "bearer",
@@ -197,7 +194,7 @@ builder.Services.AddSwaggerGen(options =>
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
-        Description = "Paste your access token (no 'Bearer ' prefix).",
+        Description = "JWT Authorization (use: Bearer <token>)",
         Reference = new OpenApiReference
         {
             Id = JwtBearerDefaults.AuthenticationScheme,
@@ -206,13 +203,33 @@ builder.Services.AddSwaggerGen(options =>
     };
 
     options.AddSecurityDefinition(jwtSecurityScheme.Reference.Id, jwtSecurityScheme);
+
+    // API Key
+    var apiKeyScheme = new OpenApiSecurityScheme
+    {
+        Description = "Worker API Key (use: ApiKey <your_key>)",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "ApiKey",
+        Reference = new OpenApiReference
+        {
+            Id = "ApiKey",
+            Type = ReferenceType.SecurityScheme
+        }
+    };
+
+    options.AddSecurityDefinition(apiKeyScheme.Reference.Id, apiKeyScheme);
+
+    // Require both to appear in Swagger
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        { jwtSecurityScheme, Array.Empty<string>() }
+        { jwtSecurityScheme, new string[] {} },
+        { apiKeyScheme, new string[] {} }
     });
+
     options.OperationFilter<StickyBoard.Api.Swagger.DefaultResponsesOperationFilter>();
     options.OperationFilter<StickyBoard.Api.Common.Filters.ForceJsonContentTypeFilter>();
-
 });
 
 // ==========================================================
@@ -221,22 +238,9 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 // ==========================================================
-// 6. OPTIONAL CACHE-BUSTING + SWAGGER SETUP
+// 6. SWAGGER + MIDDLEWARE
 // ==========================================================
-
-app.UseMiddleware<ErrorHandlingMiddleware>(); // Global error handling
-
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/swagger/v1/swagger.json"))
-    {
-        context.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
-        context.Response.Headers["Pragma"] = "no-cache";
-        context.Response.Headers["Expires"] = "0";
-    }
-    await next();
-});
-
+app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
@@ -251,7 +255,7 @@ app.UseSwaggerUI(options =>
 });
 
 // ==========================================================
-// 7. MIDDLEWARE PIPELINE
+// 7. PIPELINE
 // ==========================================================
 app.UseHttpsRedirection();
 app.UseAuthentication();
@@ -259,42 +263,14 @@ app.UseAuthorization();
 app.MapControllers();
 
 // ==========================================================
-// 8. DEBUG HELPER
+// 8. LOGGING
 // ==========================================================
-if (app.Environment.IsDevelopment())
-{
-    var urls = app.Urls.FirstOrDefault() ?? "http://localhost:5000";
-    var swaggerUrl = $"{urls.TrimEnd('/')}/api/swagger";
-
-    Console.WriteLine($"\n[StickyBoard API] Running in DEVELOPMENT mode");
-    Console.WriteLine($"Swagger UI available at: {swaggerUrl}\n");
-
-    try
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = swaggerUrl,
-            UseShellExecute = true
-        });
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Could not open browser automatically: {ex.Message}");
-    }
-}
-else
-{
-    Console.WriteLine("\n[StickyBoard API] Running in PRODUCTION mode");
-    Console.WriteLine("Swagger UI available at: /api/swagger (proxied via Apache)\n");
-}
-
-// --- Worker key log ---
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 var workerKey = configuration["WORKER_API_KEY"];
 
 if (string.IsNullOrEmpty(workerKey))
     logger.LogWarning("WORKER_API_KEY is not set. Worker authentication will fail.");
 else
-    logger.LogInformation("Worker key loaded successfully (base64 length: {len})", workerKey.Length);
+    logger.LogInformation("Worker key loaded successfully (length: {len})", workerKey.Length);
 
 app.Run();

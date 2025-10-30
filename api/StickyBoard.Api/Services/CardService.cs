@@ -29,52 +29,26 @@ namespace StickyBoard.Api.Services
             var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
 
             if (!(isOwner || role is BoardRole.owner or BoardRole.editor))
-                throw new UnauthorizedAccessException("User not allowed to modify cards on this board.");
+                throw new UnauthorizedAccessException("No card edit permission.");
         }
-
-        // ----------------------------------------------------------------------
-        // READ
-        // ----------------------------------------------------------------------
 
         public async Task<IEnumerable<CardDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
-        {
-            var cards = await _cards.GetByBoardAsync(boardId, ct);
-            return cards.Select(Map);
-        }
+            => (await _cards.GetByBoardAsync(boardId, ct)).Select(Map);
 
         public async Task<IEnumerable<CardDto>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
-        {
-            var cards = await _cards.GetBySectionAsync(sectionId, ct);
-            return cards.Select(Map);
-        }
+            => (await _cards.GetBySectionAsync(sectionId, ct)).Select(Map);
 
         public async Task<IEnumerable<CardDto>> GetByTabAsync(Guid userId, Guid tabId, CancellationToken ct)
-        {
-            var cards = await _cards.GetByTabAsync(tabId, ct);
-            return cards.Select(Map);
-        }
+            => (await _cards.GetByTabAsync(tabId, ct)).Select(Map);
 
         public async Task<IEnumerable<CardDto>> GetByAssigneeAsync(Guid userId, CancellationToken ct)
-        {
-            var cards = await _cards.GetByAssigneeAsync(userId, ct);
-            return cards.Select(Map);
-        }
+            => (await _cards.GetByAssigneeAsync(userId, ct)).Select(Map);
 
         public async Task<IEnumerable<CardDto>> SearchAsync(Guid userId, Guid boardId, string keyword, CancellationToken ct)
-        {
-            var cards = await _cards.SearchAsync(boardId, keyword, ct);
-            return cards.Select(Map);
-        }
+            => (await _cards.SearchAsync(boardId, keyword, ct)).Select(Map);
 
         public async Task<IEnumerable<CardDto>> GetByStatusAsync(Guid userId, Guid boardId, CardStatus status, CancellationToken ct)
-        {
-            var cards = await _cards.GetByStatusAsync(boardId, status.ToString(), ct);
-            return cards.Select(Map);
-        }
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
+            => (await _cards.GetByStatusAsync(boardId, status.ToString(), ct)).Select(Map);
 
         public async Task<Guid> CreateAsync(Guid userId, CreateCardDto dto, CancellationToken ct)
         {
@@ -87,8 +61,8 @@ namespace StickyBoard.Api.Services
                 TabId = dto.TabId,
                 Type = dto.Type,
                 Title = dto.Title,
-                Content = JsonDocument.Parse(dto.ContentJson ?? "{}"),
-                InkData = string.IsNullOrWhiteSpace(dto.InkDataJson) ? null : JsonDocument.Parse(dto.InkDataJson),
+                Content = JsonSerializer.SerializeToDocument(dto.ContentJson ?? new Dictionary<string, object>()),
+                InkData = dto.InkDataJson is null ? null : JsonSerializer.SerializeToDocument(dto.InkDataJson),
                 DueDate = dto.DueDate,
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,
@@ -114,10 +88,12 @@ namespace StickyBoard.Api.Services
             card.SectionId = dto.SectionId ?? card.SectionId;
             card.TabId = dto.TabId ?? card.TabId;
             card.Title = dto.Title ?? card.Title;
+
             if (dto.ContentJson is not null)
-                card.Content = JsonDocument.Parse(dto.ContentJson);
+                card.Content = JsonSerializer.SerializeToDocument(dto.ContentJson);
             if (dto.InkDataJson is not null)
-                card.InkData = JsonDocument.Parse(dto.InkDataJson);
+                card.InkData = JsonSerializer.SerializeToDocument(dto.InkDataJson);
+
             card.DueDate = dto.DueDate ?? card.DueDate;
             card.StartTime = dto.StartTime ?? card.StartTime;
             card.EndTime = dto.EndTime ?? card.EndTime;
@@ -139,17 +115,12 @@ namespace StickyBoard.Api.Services
             return await _cards.DeleteAsync(cardId, ct);
         }
 
-        // ----------------------------------------------------------------------
-        // BULK OPERATIONS
-        // ----------------------------------------------------------------------
-
         public async Task<int> BulkAssignAsync(Guid userId, Guid boardId, Guid assigneeId, IEnumerable<Guid> cardIds, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
             return await _cards.BulkAssignUserAsync(boardId, assigneeId, cardIds, ct);
         }
-        
-        
+
         private static CardDto Map(Card c) => new()
         {
             Id = c.Id,
@@ -158,8 +129,8 @@ namespace StickyBoard.Api.Services
             TabId = c.TabId,
             Type = c.Type,
             Title = c.Title,
-            ContentJson = c.Content?.RootElement.ToString() ?? "{}",
-            InkDataJson = c.InkData?.RootElement.ToString(),
+            ContentJson = c.Content.Deserialize<Dictionary<string, object>>()!,
+            InkDataJson = c.InkData?.Deserialize<Dictionary<string, object>>(),
             DueDate = c.DueDate,
             StartTime = c.StartTime,
             EndTime = c.EndTime,
@@ -171,6 +142,5 @@ namespace StickyBoard.Api.Services
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt
         };
-
     }
 }

@@ -32,21 +32,12 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to modify clusters for this board.");
         }
 
-        // ----------------------------------------------------------------------
-        // READ
-        // ----------------------------------------------------------------------
-
         public async Task<IEnumerable<ClusterDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
             var clusters = await _clusters.GetByBoardAsync(boardId, ct);
             return clusters.Select(Map);
         }
-        
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
 
         public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateClusterDto dto, CancellationToken ct)
         {
@@ -56,8 +47,8 @@ namespace StickyBoard.Api.Services
             {
                 BoardId = boardId,
                 ClusterType = dto.ClusterType,
-                RuleDef = dto.RuleDefJson is not null ? JsonDocument.Parse(dto.RuleDefJson) : null,
-                VisualMeta = JsonDocument.Parse(dto.VisualMetaJson ?? "{}"),
+                RuleDef = dto.RuleDefJson is null ? null : JsonSerializer.SerializeToDocument(dto.RuleDefJson),
+                VisualMeta = JsonSerializer.SerializeToDocument(dto.VisualMetaJson ?? new Dictionary<string, object>()),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -75,10 +66,11 @@ namespace StickyBoard.Api.Services
 
             if (dto.ClusterType.HasValue)
                 existing.ClusterType = dto.ClusterType.Value;
+
             if (dto.RuleDefJson is not null)
-                existing.RuleDef = JsonDocument.Parse(dto.RuleDefJson);
+                existing.RuleDef = JsonSerializer.SerializeToDocument(dto.RuleDefJson);
             if (dto.VisualMetaJson is not null)
-                existing.VisualMeta = JsonDocument.Parse(dto.VisualMetaJson);
+                existing.VisualMeta = JsonSerializer.SerializeToDocument(dto.VisualMetaJson);
 
             existing.UpdatedAt = DateTime.UtcNow;
             return await _clusters.UpdateAsync(existing, ct);
@@ -93,14 +85,14 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, existing.BoardId, ct);
             return await _clusters.DeleteAsync(clusterId, ct);
         }
-        
+
         private static ClusterDto Map(Cluster c) => new()
         {
             Id = c.Id,
             BoardId = c.BoardId,
             ClusterType = c.ClusterType,
-            RuleDefJson = c.RuleDef?.RootElement.ToString(),
-            VisualMetaJson = c.VisualMeta?.RootElement.ToString() ?? "{}",
+            RuleDefJson = c.RuleDef?.Deserialize<Dictionary<string, object>>(),
+            VisualMetaJson = c.VisualMeta?.Deserialize<Dictionary<string, object>>() ?? new(),
             CreatedAt = c.CreatedAt,
             UpdatedAt = c.UpdatedAt
         };

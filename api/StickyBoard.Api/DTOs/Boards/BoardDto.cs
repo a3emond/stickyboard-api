@@ -1,4 +1,5 @@
 ﻿using StickyBoard.Api.Models.Enums;
+using System.Text.Json;
 
 namespace StickyBoard.Api.DTOs.Boards
 {
@@ -10,8 +11,11 @@ namespace StickyBoard.Api.DTOs.Boards
         public Guid? ParentBoardId { get; set; }
         public string Title { get; set; } = string.Empty;
         public BoardVisibility Visibility { get; set; } = BoardVisibility.private_;
-        public string ThemeJson { get; set; } = "{}";
-        public string RulesJson { get; set; } = "[]";
+
+        // Structured JSON fields
+        public Dictionary<string, object>? Theme { get; set; }
+        public List<Dictionary<string, object>>? Rules { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
@@ -22,8 +26,9 @@ namespace StickyBoard.Api.DTOs.Boards
         public Guid? OrganizationId { get; set; }
         public Guid? ParentBoardId { get; set; }
         public BoardVisibility Visibility { get; set; } = BoardVisibility.private_;
-        public string? ThemeJson { get; set; }
-        public string? RulesJson { get; set; }
+
+        public Dictionary<string, object>? Theme { get; set; }
+        public List<Dictionary<string, object>>? Rules { get; set; }
     }
 
     public sealed class UpdateBoardDto
@@ -32,7 +37,8 @@ namespace StickyBoard.Api.DTOs.Boards
         public Guid? OrganizationId { get; set; }
         public Guid? ParentBoardId { get; set; }
         public BoardVisibility? Visibility { get; set; }
-        public string? ThemeJson { get; set; }
-        public string? RulesJson { get; set; }
+
+        public Dictionary<string, object>? Theme { get; set; }
+        public List<Dictionary<string, object>>? Rules { get; set; }
     }
 }

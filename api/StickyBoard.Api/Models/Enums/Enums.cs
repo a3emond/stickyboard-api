@@ -37,12 +37,17 @@ namespace StickyBoard.Api.Models.Enums
     }
 
     // =======================================================
-    // Worker / Jobs
+    // Worker / Jobs (all lowercase)
     // =======================================================
     public enum JobKind
     {
-        RuleExecutor, ClusterRebuilder, SearchIndexer,
-        SyncCompactor, NotificationDispatcher, AnalyticsExporter, Generic
+        ruleexecutor,
+        clusterrebuilder,
+        searchindexer,
+        synccompactor,
+        notificationdispatcher,
+        analyticsexporter,
+        generic
     }
 
     public enum JobStatus { queued, running, succeeded, failed, canceled, dead }
@@ -51,13 +56,6 @@ namespace StickyBoard.Api.Models.Enums
     // Messaging & Social
     // =======================================================
     public enum MessageType { invite, system, direct, org_invite }
-
-    public enum MessageStatus
-    {
-        unread,
-        read,
-        archived
-    }
-
+    public enum MessageStatus { unread, read, archived }
     public enum RelationStatus { active, blocked, inactive }
 }

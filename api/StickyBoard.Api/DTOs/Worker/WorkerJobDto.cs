@@ -52,7 +52,7 @@ namespace StickyBoard.Api.DTOs.Worker
         public Guid Id { get; set; }
         public Guid JobId { get; set; }
         public string JobKind { get; set; } = string.Empty;
-        public string? PayloadJson { get; set; }
+        public object PayloadJson { get; set; }
         public string? Error { get; set; }
         public DateTime CreatedAt { get; set; }
     }

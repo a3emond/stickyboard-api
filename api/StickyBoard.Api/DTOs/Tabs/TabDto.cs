@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using StickyBoard.Api.Models.Enums;
 
 namespace StickyBoard.Api.DTOs.Tabs
@@ -11,7 +12,7 @@ namespace StickyBoard.Api.DTOs.Tabs
         public Guid? SectionId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string TabType { get; set; } = "custom";
-        public string LayoutConfig { get; set; } = "{}";
+        public Dictionary<string, object>? LayoutConfig { get; set; }
         public int Position { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
@@ -23,7 +24,7 @@ namespace StickyBoard.Api.DTOs.Tabs
         public Guid? SectionId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string TabType { get; set; } = "custom";
-        public string? LayoutConfig { get; set; }
+        public Dictionary<string, object>? LayoutConfig { get; set; }
         public int Position { get; set; } = 0;
     }
 
@@ -31,7 +32,7 @@ namespace StickyBoard.Api.DTOs.Tabs
     {
         public string? Title { get; set; }
         public string? TabType { get; set; }
-        public string? LayoutConfig { get; set; }
+        public Dictionary<string, object>? LayoutConfig { get; set; }
         public int? Position { get; set; }
     }
 

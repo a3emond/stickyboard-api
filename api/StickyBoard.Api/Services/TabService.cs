@@ -2,12 +2,8 @@
 using StickyBoard.Api.Repositories;
 using StickyBoard.Api.Models.SectionsAndTabs;
 using StickyBoard.Api.Models.Enums;
-using System;
-using System.Collections.Generic;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Linq;
+using StickyBoard.Api.Repositories.SectionsAndTabs;
 
 namespace StickyBoard.Api.Services
 {
@@ -26,9 +22,6 @@ namespace StickyBoard.Api.Services
             _permissions = permissions;
         }
 
-        // ------------------------------------------------------------
-        // PERMISSIONS
-        // ------------------------------------------------------------
         private async Task EnsureCanEditAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             var board = await _boards.GetByIdAsync(boardId, ct)
@@ -53,9 +46,6 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to view this board.");
         }
 
-        // ----------------------------------------------------------------------
-        // READ
-        // ----------------------------------------------------------------------
         public async Task<IEnumerable<TabDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
@@ -73,15 +63,12 @@ namespace StickyBoard.Api.Services
             return tabs.Select(Map);
         }
 
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
         public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateTabDto dto, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
 
             if (dto.Scope == TabScope.section && dto.SectionId is null)
-                throw new ArgumentException("SectionId is required when scope = section.");
+                throw new ArgumentException("SectionId required when scope = section.");
 
             var tab = new Tab
             {
@@ -90,7 +77,7 @@ namespace StickyBoard.Api.Services
                 SectionId = dto.SectionId,
                 Title = dto.Title,
                 TabType = dto.TabType,
-                LayoutConfig = JsonDocument.Parse(dto.LayoutConfig ?? "{}"),
+                LayoutConfig = JsonSerializer.SerializeToDocument(dto.LayoutConfig ?? new Dictionary<string, object>()),
                 Position = dto.Position,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -109,8 +96,10 @@ namespace StickyBoard.Api.Services
 
             current.Title = dto.Title ?? current.Title;
             current.TabType = dto.TabType ?? current.TabType;
+
             if (dto.LayoutConfig is not null)
-                current.LayoutConfig = JsonDocument.Parse(dto.LayoutConfig);
+                current.LayoutConfig = JsonSerializer.SerializeToDocument(dto.LayoutConfig);
+
             current.Position = dto.Position ?? current.Position;
             current.UpdatedAt = DateTime.UtcNow;
 
@@ -127,16 +116,12 @@ namespace StickyBoard.Api.Services
             return await _tabs.DeleteAsync(tabId, ct);
         }
 
-        // ----------------------------------------------------------------------
-        // REORDER
-        // ----------------------------------------------------------------------
         public async Task<int> ReorderAsync(Guid userId, TabScope scope, Guid parentId, IEnumerable<ReorderTabDto> updates, CancellationToken ct)
         {
             if (scope == TabScope.board)
             {
                 await EnsureCanEditAsync(userId, parentId, ct);
-                var mapped = updates.Select(u => (u.Id, u.Position));
-                return await _tabs.ReorderAsync(parentId, mapped, ct);
+                return await _tabs.ReorderAsync(parentId, updates.Select(u => (u.Id, u.Position)), ct);
             }
 
             if (scope == TabScope.section)
@@ -145,8 +130,7 @@ namespace StickyBoard.Api.Services
                               ?? throw new KeyNotFoundException("Section not found.");
 
                 await EnsureCanEditAsync(userId, section.BoardId, ct);
-                var mapped = updates.Select(u => (u.Id, u.Position));
-                return await _tabs.ReorderAsync(parentId, mapped, ct);
+                return await _tabs.ReorderAsync(parentId, updates.Select(u => (u.Id, u.Position)), ct);
             }
 
             throw new ArgumentOutOfRangeException(nameof(scope));
@@ -160,7 +144,7 @@ namespace StickyBoard.Api.Services
             SectionId = t.SectionId,
             Title = t.Title,
             TabType = t.TabType,
-            LayoutConfig = t.LayoutConfig?.RootElement.GetRawText() ?? "{}",
+            LayoutConfig = t.LayoutConfig.Deserialize<Dictionary<string, object>>()!,
             Position = t.Position,
             CreatedAt = t.CreatedAt,
             UpdatedAt = t.UpdatedAt

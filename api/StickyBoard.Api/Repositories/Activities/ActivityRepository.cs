@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.Activities;
 using StickyBoard.Api.Repositories.Base;
 
@@ -11,7 +12,6 @@ namespace StickyBoard.Api.Repositories
         protected override Activity Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Activity>(reader);
 
-        // Insert new activity (append-only)
         public override async Task<Guid> CreateAsync(Activity e, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -24,16 +24,15 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("card", (object?)e.CardId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("actor", (object?)e.ActorId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("type", e.ActType.ToString());
-            cmd.Parameters.AddWithValue("payload", e.Payload.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb,
+                e.Payload?.RootElement.GetRawText() ?? "{}");
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
 
-        // Append-only, no update logic
         public override Task<bool> UpdateAsync(Activity e, CancellationToken ct)
             => Task.FromResult(false);
 
-        // Deletion discouraged but possible (for admin cleanup)
         public override async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -42,11 +41,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // ----------------------------------------------------------------------
-        // ADDITIONAL USEFUL QUERIES
-        // ----------------------------------------------------------------------
-
-        // Get all activities for a given board (ordered by time, most recent first)
         public async Task<IEnumerable<Activity>> GetByBoardAsync(Guid boardId, CancellationToken ct)
         {
             var list = new List<Activity>();
@@ -64,7 +58,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Get all activities related to a specific card
         public async Task<IEnumerable<Activity>> GetByCardAsync(Guid cardId, CancellationToken ct)
         {
             var list = new List<Activity>();
@@ -82,7 +75,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Optionally: retrieve the most recent N activities (for dashboard feeds)
         public async Task<IEnumerable<Activity>> GetRecentAsync(int limit, CancellationToken ct)
         {
             var list = new List<Activity>();

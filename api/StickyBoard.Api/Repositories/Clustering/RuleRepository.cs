@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.Clustering;
 using StickyBoard.Api.Repositories.Base;
 
@@ -11,10 +12,6 @@ namespace StickyBoard.Api.Repositories
         protected override Rule Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Rule>(reader);
 
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
-
         public override async Task<Guid> CreateAsync(Rule e, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
@@ -24,7 +21,9 @@ namespace StickyBoard.Api.Repositories
                 RETURNING id", conn);
 
             cmd.Parameters.AddWithValue("board", e.BoardId);
-            cmd.Parameters.AddWithValue("def", e.Definition.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("def", NpgsqlDbType.Jsonb,
+                e.Definition.RootElement.GetRawText());
+
             cmd.Parameters.AddWithValue("enabled", e.Enabled);
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
@@ -41,7 +40,8 @@ namespace StickyBoard.Api.Repositories
                 WHERE id = @id", conn);
 
             cmd.Parameters.AddWithValue("id", e.Id);
-            cmd.Parameters.AddWithValue("def", e.Definition.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("def", NpgsqlDbType.Jsonb,
+                e.Definition.RootElement.GetRawText());
             cmd.Parameters.AddWithValue("enabled", e.Enabled);
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
@@ -55,11 +55,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // ----------------------------------------------------------------------
-        // ADDITIONAL QUERIES
-        // ----------------------------------------------------------------------
-
-        // Get all rules for a given board
         public async Task<IEnumerable<Rule>> GetByBoardAsync(Guid boardId, CancellationToken ct)
         {
             var list = new List<Rule>();
@@ -78,7 +73,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Get all enabled rules (for background worker evaluation)
         public async Task<IEnumerable<Rule>> GetEnabledAsync(CancellationToken ct)
         {
             var list = new List<Rule>();
@@ -95,7 +89,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Get all disabled rules (useful for admin filtering)
         public async Task<IEnumerable<Rule>> GetDisabledAsync(CancellationToken ct)
         {
             var list = new List<Rule>();
@@ -112,7 +105,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Get rules for a specific cluster (if linked)
         public async Task<IEnumerable<Rule>> GetByClusterAsync(Guid clusterId, CancellationToken ct)
         {
             var list = new List<Rule>();

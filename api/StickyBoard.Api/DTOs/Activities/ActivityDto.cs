@@ -10,7 +10,7 @@ namespace StickyBoard.Api.DTOs.Activities
         public Guid? CardId { get; set; }
         public Guid? ActorId { get; set; }
         public ActivityType ActType { get; set; }
-        public string PayloadJson { get; set; } = "{}";
+        public Dictionary<string, object> PayloadJson { get; set; } = new();
         public DateTime CreatedAt { get; set; }
     }
 
@@ -19,6 +19,6 @@ namespace StickyBoard.Api.DTOs.Activities
         public Guid BoardId { get; set; }
         public Guid? CardId { get; set; }
         public ActivityType ActType { get; set; }
-        public string PayloadJson { get; set; } = "{}";
+        public Dictionary<string, object>? PayloadJson { get; set; }
     }
 }

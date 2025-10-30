@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.FilesAndOps;
 using StickyBoard.Api.Repositories.Base;
 using File = StickyBoard.Api.Models.FilesAndOps.File;
@@ -11,10 +12,6 @@ namespace StickyBoard.Api.Repositories
 
         protected override File Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<File>(reader);
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
 
         public override async Task<Guid> CreateAsync(File e, CancellationToken ct)
         {
@@ -31,14 +28,13 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("name", e.FileName);
             cmd.Parameters.AddWithValue("mime", (object?)e.MimeType ?? DBNull.Value);
             cmd.Parameters.AddWithValue("size", e.SizeBytes);
-            cmd.Parameters.AddWithValue("meta", e.Meta.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("meta", NpgsqlDbType.Jsonb, e.Meta?.RootElement.GetRawText() ?? "{}");
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
 
         public override async Task<bool> UpdateAsync(File e, CancellationToken ct)
         {
-            // File metadata is rarely updated, but allowed
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
                 UPDATE files SET
@@ -51,7 +47,7 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("id", e.Id);
             cmd.Parameters.AddWithValue("mime", (object?)e.MimeType ?? DBNull.Value);
             cmd.Parameters.AddWithValue("size", e.SizeBytes);
-            cmd.Parameters.AddWithValue("meta", e.Meta.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("meta", NpgsqlDbType.Jsonb, e.Meta?.RootElement.GetRawText() ?? "{}");
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
@@ -64,11 +60,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // ----------------------------------------------------------------------
-        // ADDITIONAL QUERIES
-        // ----------------------------------------------------------------------
-
-        // Retrieve all files owned by a specific user
         public async Task<IEnumerable<File>> GetByOwnerAsync(Guid ownerId, CancellationToken ct)
         {
             var list = new List<File>();
@@ -87,7 +78,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve all files attached to a specific board
         public async Task<IEnumerable<File>> GetByBoardAsync(Guid boardId, CancellationToken ct)
         {
             var list = new List<File>();
@@ -106,7 +96,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve all files attached to a specific card
         public async Task<IEnumerable<File>> GetByCardAsync(Guid cardId, CancellationToken ct)
         {
             var list = new List<File>();
@@ -125,7 +114,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve a file by its storage key (for validation or deduplication)
         public async Task<File?> GetByStorageKeyAsync(string key, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);

@@ -32,20 +32,12 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to modify rules for this board.");
         }
 
-        // ----------------------------------------------------------------------
-        // READ
-        // ----------------------------------------------------------------------
-
         public async Task<IEnumerable<RuleDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanEditAsync(userId, boardId, ct);
             var list = await _rules.GetByBoardAsync(boardId, ct);
             return list.Select(Map);
         }
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
 
         public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateRuleDto dto, CancellationToken ct)
         {
@@ -54,7 +46,10 @@ namespace StickyBoard.Api.Services
             var rule = new Rule
             {
                 BoardId = boardId,
-                Definition = JsonDocument.Parse(dto.DefinitionJson ?? "{}"),
+                Definition = dto.DefinitionJson is null
+                    ? JsonDocument.Parse("{}")
+                    : JsonSerializer.SerializeToDocument(dto.DefinitionJson),
+
                 Enabled = dto.Enabled,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -72,7 +67,8 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, existing.BoardId, ct);
 
             if (dto.DefinitionJson is not null)
-                existing.Definition = JsonDocument.Parse(dto.DefinitionJson);
+                existing.Definition = JsonSerializer.SerializeToDocument(dto.DefinitionJson);
+
             existing.Enabled = dto.Enabled ?? existing.Enabled;
             existing.UpdatedAt = DateTime.UtcNow;
 
@@ -88,12 +84,12 @@ namespace StickyBoard.Api.Services
             await EnsureCanEditAsync(userId, existing.BoardId, ct);
             return await _rules.DeleteAsync(ruleId, ct);
         }
-        
+
         private static RuleDto Map(Rule r) => new()
         {
             Id = r.Id,
             BoardId = r.BoardId,
-            DefinitionJson = r.Definition?.RootElement.GetRawText() ?? "{}",
+            DefinitionJson = r.Definition?.Deserialize<Dictionary<string, object>>() ?? new(),
             Enabled = r.Enabled,
             CreatedAt = r.CreatedAt,
             UpdatedAt = r.UpdatedAt

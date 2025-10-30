@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.Cards;
 using StickyBoard.Api.Repositories.Base;
 
@@ -15,7 +16,7 @@ namespace StickyBoard.Api.Repositories
         // CORE CRUD
         // ---------------------------------------------------------------------
 
-        public override async Task<Guid> CreateAsync(Card e, CancellationToken ct)
+         public override async Task<Guid> CreateAsync(Card e, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
             await using var cmd = new NpgsqlCommand(@"
@@ -36,8 +37,12 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("tab", (object?)e.TabId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("type", e.Type);
             cmd.Parameters.AddWithValue("title", (object?)e.Title ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("content", e.Content.RootElement.GetRawText());
-            cmd.Parameters.AddWithValue("ink", (object?)e.InkData?.RootElement.GetRawText() ?? DBNull.Value);
+
+            cmd.Parameters.AddWithValue("content", NpgsqlDbType.Jsonb, e.Content.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("ink", e.InkData is null 
+                ? DBNull.Value 
+                : (object)new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Jsonb, Value = e.InkData.RootElement.GetRawText() });
+
             cmd.Parameters.AddWithValue("due", (object?)e.DueDate ?? DBNull.Value);
             cmd.Parameters.AddWithValue("start", (object?)e.StartTime ?? DBNull.Value);
             cmd.Parameters.AddWithValue("end", (object?)e.EndTime ?? DBNull.Value);
@@ -74,8 +79,12 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("section", (object?)e.SectionId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("tab", (object?)e.TabId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("title", (object?)e.Title ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("content", e.Content.RootElement.GetRawText());
-            cmd.Parameters.AddWithValue("ink", (object?)e.InkData?.RootElement.GetRawText() ?? DBNull.Value);
+
+            cmd.Parameters.AddWithValue("content", NpgsqlDbType.Jsonb, e.Content.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("ink", e.InkData is null 
+                ? DBNull.Value 
+                : (object)new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Jsonb, Value = e.InkData.RootElement.GetRawText() });
+
             cmd.Parameters.AddWithValue("due", (object?)e.DueDate ?? DBNull.Value);
             cmd.Parameters.AddWithValue("start", (object?)e.StartTime ?? DBNull.Value);
             cmd.Parameters.AddWithValue("end", (object?)e.EndTime ?? DBNull.Value);

@@ -23,9 +23,6 @@ namespace StickyBoard.Api.Services
             _permissions = permissions;
         }
 
-        // ------------------------------------------------------------
-        // PERMISSIONS
-        // ------------------------------------------------------------
         private async Task EnsureCanViewAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             var board = await _boards.GetByIdAsync(boardId, ct)
@@ -38,12 +35,8 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to access this board's operations.");
         }
 
-        // ------------------------------------------------------------
-        // APPEND
-        // ------------------------------------------------------------
         public async Task<Guid> AppendAsync(Guid userId, CreateOperationDto dto, CancellationToken ct)
         {
-            // Optional: validate permission if entity is board-related
             if (dto.Entity is EntityType.board or EntityType.section or EntityType.card)
             {
                 if (dto.EntityId.HasValue)
@@ -57,12 +50,14 @@ namespace StickyBoard.Api.Services
             var operation = new Operation
             {
                 Id = Guid.NewGuid(),
-                DeviceId = dto.DeviceId, // string type
+                DeviceId = dto.DeviceId,
                 UserId = userId,
                 Entity = dto.Entity,
                 EntityId = dto.EntityId ?? throw new ArgumentException("EntityId is required."),
                 OpType = dto.OpType,
-                Payload = JsonDocument.Parse(dto.PayloadJson ?? "{}"),
+                Payload = dto.PayloadJson is null
+                    ? JsonDocument.Parse("{}")
+                    : JsonSerializer.SerializeToDocument(dto.PayloadJson),
                 VersionPrev = dto.VersionPrev,
                 VersionNext = dto.VersionNext,
                 CreatedAt = DateTime.UtcNow
@@ -71,9 +66,6 @@ namespace StickyBoard.Api.Services
             return await _operations.CreateAsync(operation, ct);
         }
 
-        // ------------------------------------------------------------
-        // QUERY
-        // ------------------------------------------------------------
         public async Task<IEnumerable<OperationDto>> QueryAsync(Guid userId, OperationQueryDto dto, CancellationToken ct)
         {
             IEnumerable<Operation> ops;
@@ -95,15 +87,11 @@ namespace StickyBoard.Api.Services
             return ops.Select(Map);
         }
 
-        // ------------------------------------------------------------
-        // MAINTENANCE
-        // ------------------------------------------------------------
         public async Task<OperationMaintenanceResultDto> MaintenanceAsync(TimeSpan retention, CancellationToken ct)
         {
             var cutoff = DateTime.UtcNow.Subtract(retention);
             var deleted = await _operations.DeleteOlderThanAsync(cutoff, ct);
 
-            // Extend later: mark processed, archive, etc.
             return new OperationMaintenanceResultDto
             {
                 DeletedCount = deleted,
@@ -119,7 +107,7 @@ namespace StickyBoard.Api.Services
             Entity = o.Entity,
             EntityId = o.EntityId,
             OpType = o.OpType,
-            PayloadJson = o.Payload?.RootElement.GetRawText() ?? "{}",
+            PayloadJson = o.Payload?.Deserialize<Dictionary<string, object>>(),
             VersionPrev = o.VersionPrev,
             VersionNext = o.VersionNext,
             CreatedAt = o.CreatedAt,

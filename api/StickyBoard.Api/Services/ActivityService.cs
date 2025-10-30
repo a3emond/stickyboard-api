@@ -25,9 +25,6 @@ namespace StickyBoard.Api.Services
             _permissions = permissions;
         }
 
-        // ------------------------------------------------------------
-        // PERMISSION HELPERS
-        // ------------------------------------------------------------
         private async Task EnsureCanViewAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             var board = await _boards.GetByIdAsync(boardId, ct)
@@ -40,9 +37,6 @@ namespace StickyBoard.Api.Services
                 throw new UnauthorizedAccessException("User not allowed to view this board's activities.");
         }
 
-        // ------------------------------------------------------------
-        // MAPPING
-        // ------------------------------------------------------------
         private static ActivityDto Map(Activity a) => new()
         {
             Id = a.Id,
@@ -50,13 +44,10 @@ namespace StickyBoard.Api.Services
             CardId = a.CardId,
             ActorId = a.ActorId,
             ActType = a.ActType,
-            PayloadJson = a.Payload?.RootElement.ToString() ?? "{}",
+            PayloadJson = a.Payload?.Deserialize<Dictionary<string, object>>() ?? new(),
             CreatedAt = a.CreatedAt
         };
 
-        // ------------------------------------------------------------
-        // READ
-        // ------------------------------------------------------------
         public async Task<IEnumerable<ActivityDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
         {
             await EnsureCanViewAsync(userId, boardId, ct);
@@ -76,14 +67,10 @@ namespace StickyBoard.Api.Services
 
         public async Task<IEnumerable<ActivityDto>> GetRecentAsync(Guid userId, int limit, CancellationToken ct)
         {
-            // Optionally restrict to admin or same org in future
             var entities = await _activities.GetRecentAsync(limit, ct);
             return entities.Select(Map);
         }
 
-        // ------------------------------------------------------------
-        // CREATE (append-only)
-        // ------------------------------------------------------------
         public async Task<Guid> LogAsync(Guid actorId, CreateActivityDto dto, CancellationToken ct)
         {
             await EnsureCanViewAsync(actorId, dto.BoardId, ct);
@@ -95,19 +82,15 @@ namespace StickyBoard.Api.Services
                 CardId = dto.CardId,
                 ActorId = actorId,
                 ActType = dto.ActType,
-                Payload = JsonDocument.Parse(dto.PayloadJson ?? "{}"),
+                Payload = JsonSerializer.SerializeToDocument(dto.PayloadJson ?? new Dictionary<string, object>()),
                 CreatedAt = DateTime.UtcNow
             };
 
             return await _activities.CreateAsync(entity, ct);
         }
 
-        // ------------------------------------------------------------
-        // ADMIN (optional)
-        // ------------------------------------------------------------
         public async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
         {
-            // For future admin cleanup
             return await _activities.DeleteAsync(id, ct);
         }
     }

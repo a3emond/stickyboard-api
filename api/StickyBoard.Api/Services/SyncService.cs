@@ -1,6 +1,8 @@
-﻿using StickyBoard.Api.DTOs.Sync;
+﻿using System.Text.Json;
+using StickyBoard.Api.DTOs.Sync;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Repositories;
+using StickyBoard.Api.Repositories.SectionsAndTabs;
 
 namespace StickyBoard.Api.Services
 {
@@ -44,22 +46,30 @@ namespace StickyBoard.Api.Services
 
             foreach (var op in dto.Operations)
             {
+                Dictionary<string, object>? payload = null;
+
+                if (!string.IsNullOrWhiteSpace(op.PayloadJson))
+                {
+                    payload = JsonSerializer.Deserialize<Dictionary<string, object>>(op.PayloadJson!);
+                }
+
                 var id = await _operations.AppendAsync(userId, new DTOs.Operations.CreateOperationDto
                 {
                     DeviceId = dto.DeviceId,
-                    Entity = op.Entity,
+                    Entity   = op.Entity,
                     EntityId = op.EntityId,
-                    OpType = op.OpType,
-                    PayloadJson = op.PayloadJson ?? "{}",
+                    OpType   = op.OpType,
+                    PayloadJson = payload,          
                     VersionPrev = op.VersionPrev,
                     VersionNext = op.VersionNext
+
                 }, ct);
 
                 accepted.Add(id);
             }
 
             await _worker.EnqueueAsync(
-                JobKind.SyncCompactor,
+                JobKind.synccompactor,
                 new { DeviceId = dto.DeviceId, UserId = userId },
                 priority: 0, maxAttempts: 3, ct);
 
@@ -70,6 +80,8 @@ namespace StickyBoard.Api.Services
                 ServerTime = DateTime.UtcNow
             };
         }
+
+
 
         // ------------------------------------------------------------
         // PULL (server → client)

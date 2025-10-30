@@ -1,8 +1,9 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.SectionsAndTabs;
 using StickyBoard.Api.Repositories.Base;
 
-namespace StickyBoard.Api.Repositories
+namespace StickyBoard.Api.Repositories.SectionsAndTabs
 {
     public class TabRepository : RepositoryBase<Tab>
     {
@@ -10,10 +11,6 @@ namespace StickyBoard.Api.Repositories
 
         protected override Tab Map(NpgsqlDataReader reader)
             => MappingHelper.MapEntity<Tab>(reader);
-
-        // ----------------------------------------------------------------------
-        // CREATE / UPDATE / DELETE
-        // ----------------------------------------------------------------------
 
         public override async Task<Guid> CreateAsync(Tab e, CancellationToken ct)
         {
@@ -28,7 +25,7 @@ namespace StickyBoard.Api.Repositories
             cmd.Parameters.AddWithValue("section", (object?)e.SectionId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("title", e.Title);
             cmd.Parameters.AddWithValue("type", e.TabType);
-            cmd.Parameters.AddWithValue("config", e.LayoutConfig.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("config", NpgsqlDbType.Jsonb, e.LayoutConfig.RootElement.GetRawText());
             cmd.Parameters.AddWithValue("pos", e.Position);
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
@@ -40,13 +37,17 @@ namespace StickyBoard.Api.Repositories
             await using var cmd = new NpgsqlCommand(@"
                 UPDATE tabs SET
                     title = @title,
+                    tab_type = @type,
                     layout_config = @config,
+                    position = @pos,
                     updated_at = now()
                 WHERE id = @id", conn);
 
             cmd.Parameters.AddWithValue("id", e.Id);
             cmd.Parameters.AddWithValue("title", e.Title);
-            cmd.Parameters.AddWithValue("config", e.LayoutConfig.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("type", e.TabType);
+            cmd.Parameters.AddWithValue("config", NpgsqlDbType.Jsonb, e.LayoutConfig.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("pos", e.Position);
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
@@ -59,11 +60,6 @@ namespace StickyBoard.Api.Repositories
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
 
-        // ----------------------------------------------------------------------
-        // ADDITIONAL QUERIES
-        // ----------------------------------------------------------------------
-
-        // Retrieve all tabs for a given section
         public async Task<IEnumerable<Tab>> GetBySectionAsync(Guid sectionId, CancellationToken ct)
         {
             var list = new List<Tab>();
@@ -82,7 +78,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve all tabs for a given board (regardless of section)
         public async Task<IEnumerable<Tab>> GetByBoardAsync(Guid boardId, CancellationToken ct)
         {
             var list = new List<Tab>();
@@ -101,7 +96,6 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Retrieve all tabs of a given type (useful for admin analytics)
         public async Task<IEnumerable<Tab>> GetByTypeAsync(string tabType, CancellationToken ct)
         {
             var list = new List<Tab>();
@@ -120,12 +114,11 @@ namespace StickyBoard.Api.Repositories
             return list;
         }
 
-        // Bulk reorder tabs within a section
-        public async Task<int> ReorderAsync(Guid sectionId, IEnumerable<(Guid Id, int Position)> positions, CancellationToken ct)
+        public async Task<int> ReorderAsync(Guid parentId, IEnumerable<(Guid Id, int Position)> positions, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);
             await using var tx = await conn.BeginTransactionAsync(ct);
-
+            
             var totalUpdated = 0;
             foreach (var (id, pos) in positions)
             {
@@ -133,9 +126,9 @@ namespace StickyBoard.Api.Repositories
                     UPDATE tabs
                     SET position = @pos,
                         updated_at = now()
-                    WHERE id = @id AND section_id = @section", conn, tx);
+                    WHERE id = @id AND (board_id = @parent OR section_id = @parent)", conn, tx);
 
-                cmd.Parameters.AddWithValue("section", sectionId);
+                cmd.Parameters.AddWithValue("parent", parentId);
                 cmd.Parameters.AddWithValue("id", id);
                 cmd.Parameters.AddWithValue("pos", pos);
 
@@ -146,7 +139,6 @@ namespace StickyBoard.Api.Repositories
             return totalUpdated;
         }
 
-        // Delete all tabs under a given section (for section cleanup)
         public async Task<int> DeleteBySectionAsync(Guid sectionId, CancellationToken ct)
         {
             await using var conn = await OpenAsync(ct);

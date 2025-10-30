@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using NpgsqlTypes;
 using StickyBoard.Api.Models.Enums;
 using StickyBoard.Api.Models.Worker;
 using StickyBoard.Api.Repositories.Base;
@@ -24,11 +25,12 @@ namespace StickyBoard.Api.Repositories
                 VALUES (@kind, @prio, @run, @max, @payload)
                 RETURNING id", conn);
 
-            cmd.Parameters.AddWithValue("kind", e.JobKind.ToString());
+            cmd.Parameters.AddWithValue("kind", e.JobKind);
             cmd.Parameters.AddWithValue("prio", e.Priority);
             cmd.Parameters.AddWithValue("run", e.RunAt);
             cmd.Parameters.AddWithValue("max", e.MaxAttempts);
-            cmd.Parameters.AddWithValue("payload", e.Payload.RootElement.GetRawText());
+            cmd.Parameters.AddWithValue("payload", NpgsqlDbType.Jsonb, e.Payload.RootElement.GetRawText());
+
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }

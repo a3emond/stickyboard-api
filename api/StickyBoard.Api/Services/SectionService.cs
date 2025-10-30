@@ -51,7 +51,7 @@ namespace StickyBoard.Api.Services
                 BoardId = boardId,
                 Title = dto.Title,
                 Position = dto.Position,
-                LayoutMeta = JsonDocument.Parse(dto.LayoutMeta ?? "{}"),
+                LayoutMeta = JsonSerializer.SerializeToDocument(dto.LayoutMeta ?? new Dictionary<string, object>()),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -69,8 +69,10 @@ namespace StickyBoard.Api.Services
 
             current.Title = dto.Title ?? current.Title;
             current.Position = dto.Position ?? current.Position;
+
             if (dto.LayoutMeta is not null)
-                current.LayoutMeta = JsonDocument.Parse(dto.LayoutMeta);
+                current.LayoutMeta = JsonSerializer.SerializeToDocument(dto.LayoutMeta);
+
             current.UpdatedAt = DateTime.UtcNow;
 
             return await _sections.UpdateAsync(current, ct);
@@ -99,7 +101,7 @@ namespace StickyBoard.Api.Services
             BoardId = s.BoardId,
             Title = s.Title,
             Position = s.Position,
-            LayoutMeta = s.LayoutMeta?.RootElement.GetRawText() ?? "{}",
+            LayoutMeta = s.LayoutMeta.Deserialize<Dictionary<string, object>>()!,
             CreatedAt = s.CreatedAt,
             UpdatedAt = s.UpdatedAt
         };
