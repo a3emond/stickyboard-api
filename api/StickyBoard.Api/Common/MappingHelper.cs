@@ -4,7 +4,7 @@ using System.Text.Json;
 using Npgsql;
 using StickyBoard.Api.Models.Base;
 
-namespace StickyBoard.Api.Repositories.Base
+namespace StickyBoard.Api.Common
 {
     public static class MappingHelper
     {

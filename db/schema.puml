@@ -1,297 +1,269 @@
 @startuml
-title StickyBoard – Data Layer UML Overview
-
-' General appearance
-skinparam classAttributeIconSize 0
+!theme plain
 hide circle
-hide methods
-skinparam packageStyle rectangle
-skinparam class {
-    BackgroundColor White
-    ArrowColor #444
-    BorderColor #333
-}
+hide stereotype
 
-' ==========================================================
+' ==========================================
 ' USERS & AUTH
-' ==========================================================
-package "Users" {
-    class User {
-        +Id : uuid
-        +Email : text
-        +DisplayName : text
-        +AvatarUri : text
-        +Prefs : jsonb
-        +CreatedAt : timestamptz
-        +UpdatedAt : timestamptz
-    }
+' ==========================================
+package "Users & Authentication" {
 
-    class AuthUser {
-        +UserId : uuid
-        +PasswordHash : text
-        +Role : user_role
-        +LastLogin : timestamptz
-    }
-
-    class RefreshToken {
-        +TokenHash : text
-        +UserId : uuid
-        +ExpiresAt : timestamptz
-        +Revoked : bool
-    }
-
-    class UserRelation {
-        +UserId : uuid
-        +FriendId : uuid
-        +Status : relation_status
-    }
+entity users {
+  * id : uuid <<PK>>
+  --
+  email : text
+  display_name : text
+  avatar_uri : text
+  prefs : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-User "1" --> "1" AuthUser : auth
-User "1" --> "many" RefreshToken : tokens
-User "many" --> "many" UserRelation : friends
+entity auth_users {
+  * user_id : uuid <<PK, FK>>
+  --
+  password_hash : text
+  role : user_role
+  last_login : timestamptz
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
 
-' ==========================================================
+entity refresh_tokens {
+  * token_hash : text <<PK>>
+  --
+  user_id : uuid <<FK>>
+  expires_at : timestamptz
+  revoked : boolean
+  created_at : timestamptz
+}
+}
+
+users ||--|| auth_users
+users ||--o{ refresh_tokens
+
+' ==========================================
 ' ORGANIZATIONS
-' ==========================================================
-package "Organizations" {
-    class Organization {
-        +Id : uuid
-        +Name : text
-        +OwnerId : uuid
-    }
+' ==========================================
+package "Organizations & Memberships" {
 
-    class OrganizationMember {
-        +OrgId : uuid
-        +UserId : uuid
-        +Role : org_role
-    }
+entity organizations {
+  * id : uuid <<PK>>
+  --
+  owner_id : uuid <<FK>>
+  name : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-User "1" --> "many" Organization : owns
-Organization "1" --> "many" OrganizationMember : members
-OrganizationMember --> User
-
-' ==========================================================
-' BOARDS & PERMISSIONS
-' ==========================================================
-package "Boards" {
-    class Board {
-        +Id : uuid
-        +OwnerId : uuid
-        +OrgId : uuid
-        +ParentBoardId : uuid
-        +Title : text
-        +Visibility : board_visibility
-        +Theme : jsonb
-        +Rules : jsonb
-    }
-
-    class Permission {
-        +UserId : uuid
-        +BoardId : uuid
-        +Role : board_role
-        +GrantedAt : timestamptz
-    }
+entity organization_members {
+  * org_id : uuid <<PK, FK>>
+  * user_id : uuid <<PK, FK>>
+  --
+  role : org_role
+  joined_at : timestamptz
+}
 }
 
-Organization --> Board
-User --> Board : owns
-Board "1" --> "many" Permission
-Permission --> User
+users ||--o{ organizations : owns >
+organizations ||--o{ organization_members
+users ||--o{ organization_members
 
-' ==========================================================
-' SECTIONS & TABS
-' ==========================================================
-package "Sections & Tabs" {
-    class Section {
-        +Id : uuid
-        +BoardId : uuid
-        +Title : text
-        +Position : int
-        +LayoutMeta : jsonb
-    }
+' ==========================================
+' BOARDS
+' ==========================================
+package "Boards Workspace" {
 
-    class Tab {
-        +Id : uuid
-        +Scope : tab_scope
-        +BoardId : uuid
-        +SectionId : uuid
-        +Title : text
-        +LayoutConfig : jsonb
-        +Position : int
-    }
+entity board_folders {
+  * id : uuid <<PK>>
+  --
+  org_id : uuid <<FK>>
+  user_id : uuid <<FK>>
+  name : text
+  icon : text
+  color : text
+  meta : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-Board --> Section
-Section --> Tab
-
-' ==========================================================
-' CARDS & TAGS
-' ==========================================================
-package "Cards & Tags" {
-    class Card {
-        +Id : uuid
-        +BoardId : uuid
-        +SectionId : uuid
-        +TabId : uuid
-        +Type : card_type
-        +Status : card_status
-        +Title : text
-        +Content : jsonb
-    }
-
-    class Tag {
-        +Id : uuid
-        +Name : text
-    }
-
-    class CardTag {
-        +CardId : uuid
-        +TagId : uuid
-    }
-
-    class Link {
-        +Id : uuid
-        +FromCard : uuid
-        +ToCard : uuid
-        +RelType : link_type
-    }
+entity boards {
+  * id : uuid <<PK>>
+  --
+  owner_id : uuid <<FK>>
+  org_id : uuid <<FK>>
+  folder_id : uuid <<FK>>
+  title : text
+  visibility : board_visibility
+  theme : jsonb
+  meta : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-Section --> Card
-Card "many" --> "many" Tag : via CardTag
-Card "1" --> "many" Link : relationships
-
-' ==========================================================
-' CLUSTERING & RULES
-' ==========================================================
-package "Clustering & Rules" {
-    class Cluster {
-        +Id : uuid
-        +BoardId : uuid
-        +ClusterType : cluster_type
-        +RuleDef : jsonb
-        +VisualMeta : jsonb
-    }
-
-    class Rule {
-        +Id : uuid
-        +BoardId : uuid
-        +Definition : jsonb
-        +Enabled : bool
-    }
+entity permissions {
+  * user_id : uuid <<PK, FK>>
+  * board_id : uuid <<PK, FK>>
+  --
+  role : board_role
+  granted_at : timestamptz
 }
 
-Board --> Cluster
-Board --> Rule
-
-' ==========================================================
-' ACTIVITIES
-' ==========================================================
-package "Activities" {
-    class Activity {
-        +Id : uuid
-        +BoardId : uuid
-        +CardId : uuid
-        +ActorId : uuid
-        +ActType : activity_type
-        +Payload : jsonb
-    }
+entity tabs {
+  * id : uuid <<PK>>
+  --
+  board_id : uuid <<FK>>
+  title : text
+  tab_type : tab_type
+  position : int
+  layout_config : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-Board --> Activity
-Card --> Activity
-
-' ==========================================================
-' FILES & OPERATIONS
-' ==========================================================
-package "Files & Operations" {
-    class File {
-        +Id : uuid
-        +OwnerId : uuid
-        +BoardId : uuid
-        +CardId : uuid
-        +StorageKey : text
-        +Meta : jsonb
-    }
-
-    class Operation {
-        +Id : uuid
-        +DeviceId : text
-        +UserId : uuid
-        +Entity : entity_type
-        +EntityId : uuid
-        +OpType : text
-        +Payload : jsonb
-    }
+entity sections {
+  * id : uuid <<PK>>
+  --
+  tab_id : uuid <<FK>>
+  parent_section_id : uuid <<FK>>
+  title : text
+  position : int
+  layout_meta : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-User --> File
-Board --> File
-Card --> File
-
-' ==========================================================
-' WORKER QUEUE
-' ==========================================================
-package "Worker" {
-    class WorkerJob {
-        +Id : uuid
-        +JobKind : job_kind
-        +Status : job_status
-        +Payload : jsonb
-        +Priority : int
-        +RunAt : timestamptz
-    }
-
-    class WorkerJobAttempt {
-        +Id : bigint
-        +JobId : uuid
-        +StartedAt : timestamptz
-        +Ok : bool
-        +Error : text
-    }
-
-    class WorkerJobDeadletter {
-        +Id : uuid
-        +JobId : uuid
-        +JobKind : job_kind
-        +LastError : text
-    }
+entity cards {
+  * id : uuid <<PK>>
+  --
+  board_id : uuid <<FK>>
+  tab_id : uuid <<FK>>
+  section_id : uuid <<FK>>
+  type : card_type
+  title : text
+  content : jsonb
+  ink_data : jsonb
+  due_date : timestamptz
+  start_time : timestamptz
+  end_time : timestamptz
+  priority : int
+  status : card_status
+  tags : text[]
+  created_by : uuid <<FK>>
+  assignee_id : uuid <<FK>>
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
 }
 
-WorkerJob "1" --> "many" WorkerJobAttempt
-WorkerJob --> WorkerJobDeadletter
+users ||--o{ boards
+organizations ||--o{ boards
+board_folders ||--o{ boards : contains >
+boards ||--o{ permissions
+users ||--o{ permissions
+boards ||--o{ tabs
+tabs ||--o{ sections
+sections ||--o{ sections : parent >
+boards ||--o{ cards
+tabs ||--o{ cards
+sections ||--o{ cards
+users ||--o{ cards : created >
+users ||--o{ cards : assigned >
 
-' ==========================================================
-' MESSAGING & INVITES
-' ==========================================================
-package "Messaging" {
-    class Message {
-        +Id : uuid
-        +SenderId : uuid
-        +ReceiverId : uuid
-        +Subject : text
-        +Body : text
-        +Type : message_type
-        +Status : message_status
-    }
+' ==========================================
+' COLLABORATION (COMMENTS & CHAT)
+' ==========================================
+package "Collaboration" {
 
-    class Invite {
-        +Id : uuid
-        +SenderId : uuid
-        +Email : text
-        +BoardId : uuid
-        +OrgId : uuid
-        +Token : text
-        +Accepted : bool
-        +ExpiresAt : timestamptz
-    }
+entity card_comments {
+  * id : uuid <<PK>>
+  --
+  card_id : uuid <<FK>>
+  user_id : uuid <<FK>>
+  content : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
 }
 
-User --> Message : sends
-User --> Invite : issues
-Board --> Invite
-Organization --> Invite
+entity board_messages {
+  * id : uuid <<PK>>
+  --
+  board_id : uuid <<FK>>
+  user_id : uuid <<FK>>
+  content : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+}
+
+cards ||--o{ card_comments
+users ||--o{ card_comments
+boards ||--o{ board_messages
+users ||--o{ board_messages
+
+' ==========================================
+' SOCIAL & MESSAGING
+' ==========================================
+package "Social Graph & Messaging" {
+
+entity user_relations {
+  * user_id : uuid <<PK, FK>>
+  * friend_id : uuid <<PK, FK>>
+  --
+  status : relation_status
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity messages {
+  * id : uuid <<PK>>
+  --
+  sender_id : uuid <<FK>>
+  receiver_id : uuid <<FK>>
+  subject : text
+  body : text
+  type : message_type
+  related_board : uuid <<FK>>
+  related_org : uuid <<FK>>
+  status : message_status
+  created_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity invites {
+  * id : uuid <<PK>>
+  --
+  sender_id : uuid <<FK>>
+  email : text
+  board_id : uuid <<FK>>
+  org_id : uuid <<FK>>
+  board_role : board_role
+  org_role : org_role
+  token : text
+  accepted : boolean
+  created_at : timestamptz
+  expires_at : timestamptz
+}
+}
+
+users ||--o{ user_relations
+users ||--o{ user_relations : friend >
+users ||--o{ messages : sends >
+users ||--o{ messages : receives >
+boards ||--o{ messages
+organizations ||--o{ messages
+users ||--o{ invites : sends >
+boards ||--o{ invites
+organizations ||--o{ invites
 
 @enduml

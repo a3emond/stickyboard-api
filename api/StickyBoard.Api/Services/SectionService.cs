@@ -1,109 +1,143 @@
-﻿using StickyBoard.Api.DTOs.Sections;
-using StickyBoard.Api.Repositories;
-using StickyBoard.Api.Models.SectionsAndTabs;
-using StickyBoard.Api.Models.Enums;
-using System.Text.Json;
+﻿using System.Text.Json;
+using StickyBoard.Api.Common.Exceptions;
+using StickyBoard.Api.DTOs;
+using StickyBoard.Api.Models;
+using StickyBoard.Api.Models.BoardsAndCards;
+using StickyBoard.Api.Repositories.BoardsAndCards;
 
-namespace StickyBoard.Api.Services
+namespace StickyBoard.Api.Services;
+
+public sealed class SectionService
 {
-    public sealed class SectionService
+    private readonly SectionRepository _sections;
+    private readonly TabRepository _tabs;
+    private readonly BoardRepository _boards;
+    private readonly PermissionRepository _permissions;
+
+    public SectionService(SectionRepository sections, TabRepository tabs, BoardRepository boards, PermissionRepository permissions)
     {
-        private readonly SectionRepository _sections;
-        private readonly BoardRepository _boards;
-        private readonly PermissionRepository _permissions;
+        _sections = sections;
+        _tabs = tabs;
+        _boards = boards;
+        _permissions = permissions;
+    }
 
-        public SectionService(SectionRepository sections, BoardRepository boards, PermissionRepository permissions)
+    private async Task EnsureEditorAsync(Guid userId, Guid boardId, CancellationToken ct)
+    {
+        var board = await _boards.GetByIdAsync(boardId, ct)
+                    ?? throw new NotFoundException("Board not found.");
+
+        if (board.OwnerId == userId) return;
+
+        var perm = await _permissions.GetAsync(boardId, userId, ct);
+        if (perm?.Role is not BoardRole.owner and not BoardRole.editor)
+            throw new ForbiddenException("Insufficient permission.");
+    }
+
+    // --------------------------------------------------------
+    // Create Section
+    // --------------------------------------------------------
+    public async Task<Guid> CreateAsync(Guid userId, SectionCreateDto dto, CancellationToken ct)
+    {
+        var tab = await _tabs.GetByIdAsync(dto.TabId, ct) ?? throw new NotFoundException("Tab not found.");
+
+        await EnsureEditorAsync(userId, tab.BoardId, ct);
+
+        var newPos = await _sections.GetMaxPositionAsync(dto.TabId, dto.ParentSectionId, ct) + 1;
+
+        var section = new Section
         {
-            _sections = sections;
-            _boards = boards;
-            _permissions = permissions;
-        }
+            TabId = dto.TabId,
+            ParentSectionId = dto.ParentSectionId,
+            Title = dto.Title?.Trim() ?? "",
+            Position = newPos,
+            LayoutMeta = JsonSerializer.SerializeToDocument(dto.Layout ?? new { }),
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
 
-        private async Task EnsureCanEditAsync(Guid userId, Guid boardId, CancellationToken ct)
-        {
-            var board = await _boards.GetByIdAsync(boardId, ct);
-            if (board is null)
-                throw new KeyNotFoundException("Board not found.");
+        return await _sections.CreateAsync(section, ct);
+    }
 
-            var isOwner = board.OwnerId == userId;
-            var role = (await _permissions.GetAsync(boardId, userId, ct))?.Role;
+    // --------------------------------------------------------
+    // Update Section
+    // --------------------------------------------------------
+    public async Task<bool> UpdateAsync(Guid userId, Guid sectionId, SectionUpdateDto dto, CancellationToken ct)
+    {
+        var section = await _sections.GetByIdAsync(sectionId, ct)
+                      ?? throw new NotFoundException("Section not found.");
 
-            if (!(isOwner || role is BoardRole.owner or BoardRole.editor))
-                throw new UnauthorizedAccessException("User not allowed to modify this board.");
-        }
+        var tab = await _tabs.GetByIdAsync(section.TabId, ct) ?? throw new NotFoundException("Tab not found.");
 
-        public async Task<IEnumerable<SectionDto>> GetByBoardAsync(Guid userId, Guid boardId, CancellationToken ct)
-        {
-            var board = await _boards.GetByIdAsync(boardId, ct);
-            if (board is null)
-                throw new KeyNotFoundException("Board not found.");
+        await EnsureEditorAsync(userId, tab.BoardId, ct);
 
-            var sections = await _sections.GetByBoardAsync(boardId, ct);
-            return sections.Select(Map);
-        }
+        if (!string.IsNullOrWhiteSpace(dto.Title))
+            section.Title = dto.Title.Trim();
 
-        public async Task<Guid> CreateAsync(Guid userId, Guid boardId, CreateSectionDto dto, CancellationToken ct)
-        {
-            await EnsureCanEditAsync(userId, boardId, ct);
+        if (dto.Layout != null)
+            section.LayoutMeta = JsonSerializer.SerializeToDocument(dto.Layout);
 
-            var section = new Section
-            {
-                BoardId = boardId,
-                Title = dto.Title,
-                Position = dto.Position,
-                LayoutMeta = JsonSerializer.SerializeToDocument(dto.LayoutMeta ?? new Dictionary<string, object>()),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+        section.UpdatedAt = DateTime.UtcNow;
 
-            return await _sections.CreateAsync(section, ct);
-        }
+        return await _sections.UpdateAsync(section, ct);
+    }
 
-        public async Task<bool> UpdateAsync(Guid userId, Guid sectionId, UpdateSectionDto dto, CancellationToken ct)
-        {
-            var current = await _sections.GetByIdAsync(sectionId, ct);
-            if (current is null)
-                return false;
+    // --------------------------------------------------------
+    // Move Section
+    // --------------------------------------------------------
+    public async Task<bool> MoveAsync(Guid userId, Guid sectionId, SectionMoveDto dto, CancellationToken ct)
+    {
+        var section = await _sections.GetByIdAsync(sectionId, ct)
+                      ?? throw new NotFoundException("Section not found.");
 
-            await EnsureCanEditAsync(userId, current.BoardId, ct);
+        var tab = await _tabs.GetByIdAsync(section.TabId, ct)
+                 ?? throw new NotFoundException("Tab not found.");
 
-            current.Title = dto.Title ?? current.Title;
-            current.Position = dto.Position ?? current.Position;
+        await EnsureEditorAsync(userId, tab.BoardId, ct);
 
-            if (dto.LayoutMeta is not null)
-                current.LayoutMeta = JsonSerializer.SerializeToDocument(dto.LayoutMeta);
+        return await _sections.MoveAsync(sectionId, section.TabId, dto.ParentSectionId, dto.NewPosition, ct);
+    }
 
-            current.UpdatedAt = DateTime.UtcNow;
+    // --------------------------------------------------------
+    // Delete Section
+    // --------------------------------------------------------
+    public async Task<bool> DeleteAsync(Guid userId, Guid sectionId, CancellationToken ct)
+    {
+        var section = await _sections.GetByIdAsync(sectionId, ct)
+                      ?? throw new NotFoundException("Section not found.");
 
-            return await _sections.UpdateAsync(current, ct);
-        }
+        var tab = await _tabs.GetByIdAsync(section.TabId, ct)
+                 ?? throw new NotFoundException("Tab not found.");
 
-        public async Task<bool> DeleteAsync(Guid userId, Guid sectionId, CancellationToken ct)
-        {
-            var current = await _sections.GetByIdAsync(sectionId, ct);
-            if (current is null)
-                return false;
+        await EnsureEditorAsync(userId, tab.BoardId, ct);
 
-            await EnsureCanEditAsync(userId, current.BoardId, ct);
-            return await _sections.DeleteAsync(sectionId, ct);
-        }
+        return await _sections.DeleteAsync(sectionId, ct);
+    }
 
-        public async Task<int> ReorderAsync(Guid userId, Guid boardId, IEnumerable<ReorderSectionDto> updates, CancellationToken ct)
-        {
-            await EnsureCanEditAsync(userId, boardId, ct);
-            var mapped = updates.Select(u => (u.Id, u.Position));
-            return await _sections.ReorderAsync(boardId, mapped, ct);
-        }
-        
-        private static SectionDto Map(Section s) => new()
+    // --------------------------------------------------------
+    // Get Sections by Tab
+    // --------------------------------------------------------
+    public async Task<IEnumerable<SectionDto>> GetForTabAsync(Guid userId, Guid tabId, CancellationToken ct)
+    {
+        var tab = await _tabs.GetByIdAsync(tabId, ct) ?? throw new NotFoundException("Tab not found.");
+
+        var board = await _boards.GetByIdAsync(tab.BoardId, ct)
+                    ?? throw new NotFoundException("Board not found.");
+
+        var perm = await _permissions.GetAsync(tab.BoardId, userId, ct);
+        if (board.OwnerId != userId && perm == null && board.Visibility != BoardVisibility.public_)
+            throw new ForbiddenException("Access denied.");
+
+        var sections = await _sections.GetByTabAsync(tabId, ct);
+
+        return sections.Select(s => new SectionDto
         {
             Id = s.Id,
-            BoardId = s.BoardId,
+            TabId = s.TabId,
+            ParentSectionId = s.ParentSectionId,
             Title = s.Title,
             Position = s.Position,
-            LayoutMeta = s.LayoutMeta.Deserialize<Dictionary<string, object>>()!,
-            CreatedAt = s.CreatedAt,
-            UpdatedAt = s.UpdatedAt
-        };
+            Layout = s.LayoutMeta.Deserialize<object>() ?? new { }
+        });
     }
 }

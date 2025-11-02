@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace StickyBoard.Api.Utils
+namespace StickyBoard.Api.Common
 {
     public static class JsonExtensions
     {

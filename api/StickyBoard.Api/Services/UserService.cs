@@ -1,9 +1,9 @@
-﻿using StickyBoard.Api.DTOs.Users;
-using StickyBoard.Api.Models.Enums;
-using StickyBoard.Api.Repositories;
-using System.Text.Json;
+﻿using System.Text.Json;
 using StickyBoard.Api.Auth;
-using StickyBoard.Api.Utils;
+using StickyBoard.Api.Common.Exceptions;
+using StickyBoard.Api.DTOs;
+using StickyBoard.Api.Models;
+using StickyBoard.Api.Repositories.UsersAndAuth;
 
 namespace StickyBoard.Api.Services;
 
@@ -21,62 +21,70 @@ public sealed class UserService
     }
 
     // ----------------------------------------------------------------------
-    // GET SINGLE USER
+    // GET: one user (admin or internal use)
     // ----------------------------------------------------------------------
     public async Task<UserDto?> GetAsync(Guid id, CancellationToken ct)
     {
-        var user = await _users.GetByIdAsync(id, ct);
-        if (user is null) return null;
+        var u = await _users.GetByIdAsync(id, ct);
+        if (u is null) return null;
 
-        var auth = await _authUsers.GetByUserIdAsync(user.Id, ct);
-
-        return new UserDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            DisplayName = user.DisplayName,
-            AvatarUri = user.AvatarUri,
-            Role = auth?.Role ?? UserRole.user
-        };
+        var au = await _authUsers.GetByUserIdAsync(u.Id, ct);
+        return ToUserDto(u, au?.Role ?? UserRole.user);
     }
 
     // ----------------------------------------------------------------------
-    // SEARCH USERS BY NAME OR EMAIL (for collaborators / admin)
+    // GET: current user (self)
+    // ----------------------------------------------------------------------
+    public async Task<UserSelfDto?> GetSelfAsync(Guid userId, CancellationToken ct)
+    {
+        if (userId == Guid.Empty) return null;
+
+        var u = await _users.GetByIdAsync(userId, ct);
+        return u is null ? null : ToUserSelfDto(u);
+    }
+
+    // ----------------------------------------------------------------------
+    // SEARCH: by display name (for collaborators / admin)
     // ----------------------------------------------------------------------
     public async Task<IEnumerable<UserDto>> SearchAsync(string query, CancellationToken ct)
     {
         var users = await _users.SearchByDisplayNameAsync(query, ct);
-        var result = new List<UserDto>();
+        var list = new List<UserDto>(capacity: 32);
 
         foreach (var u in users)
         {
-            var auth = await _authUsers.GetByUserIdAsync(u.Id, ct);
-            result.Add(new UserDto
-            {
-                Id = u.Id,
-                Email = u.Email,
-                DisplayName = u.DisplayName,
-                AvatarUri = u.AvatarUri,
-                Role = auth?.Role ?? UserRole.user
-            });
+            var au = await _authUsers.GetByUserIdAsync(u.Id, ct);
+            list.Add(ToUserDto(u, au?.Role ?? UserRole.user));
         }
-
-        return result;
+        return list;
     }
 
     // ----------------------------------------------------------------------
-    // UPDATE PROFILE (self-edit)
+    // UPDATE PROFILE (self)
     // ----------------------------------------------------------------------
-    public async Task<bool> UpdateProfileAsync(Guid userId, UpdateUserDto dto, CancellationToken ct)
+    public async Task<bool> UpdateProfileAsync(Guid userId, UserUpdateDto dto, CancellationToken ct)
     {
-        var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null) return false;
+        if (userId == Guid.Empty)
+            throw new ValidationException("Invalid user id.");
 
-        user.DisplayName = dto.DisplayName ?? user.DisplayName;
-        user.AvatarUri = dto.AvatarUri ?? user.AvatarUri;
-        user.Prefs = dto.Prefs is not null ? JsonDocument.Parse(dto.Prefs.ToJson()) : user.Prefs;
+        var u = await _users.GetByIdAsync(userId, ct);
+        if (u is null)
+            throw new NotFoundException("User not found.");
 
-        return await _users.UpdateAsync(user, ct);
+        // Basic validation: optional, but keep it tidy
+        if (string.IsNullOrWhiteSpace(dto.DisplayName) && dto.AvatarUrl is null && dto.Prefs is null)
+            throw new ValidationException("Nothing to update.");
+
+        u.DisplayName = string.IsNullOrWhiteSpace(dto.DisplayName) ? u.DisplayName : dto.DisplayName;
+        u.AvatarUri   = dto.AvatarUrl ?? u.AvatarUri;
+
+        if (dto.Prefs is not null)
+        {
+            // Convert arbitrary object to JsonDocument
+            u.Prefs = JsonSerializer.SerializeToDocument(dto.Prefs);
+        }
+
+        return await _users.UpdateAsync(u, ct);
     }
 
     // ----------------------------------------------------------------------
@@ -84,12 +92,17 @@ public sealed class UserService
     // ----------------------------------------------------------------------
     public async Task<bool> ChangePasswordAsync(Guid userId, ChangePasswordDto dto, CancellationToken ct)
     {
-        var auth = await _authUsers.GetByUserIdAsync(userId, ct);
-        if (auth is null || !_hasher.Verify(dto.OldPassword, auth.PasswordHash))
-            throw new UnauthorizedAccessException("Invalid old password.");
+        if (userId == Guid.Empty)
+            throw new ValidationException("Invalid user id.");
+        if (string.IsNullOrWhiteSpace(dto.OldPassword) || string.IsNullOrWhiteSpace(dto.NewPassword))
+            throw new ValidationException("Both old and new passwords are required.");
 
-        auth.PasswordHash = _hasher.Hash(dto.NewPassword);
-        return await _authUsers.UpdateAsync(auth, ct);
+        var au = await _authUsers.GetByUserIdAsync(userId, ct);
+        if (au is null || !_hasher.Verify(dto.OldPassword, au.PasswordHash))
+            throw new AuthInvalidException("Invalid old password.");
+
+        au.PasswordHash = _hasher.Hash(dto.NewPassword);
+        return await _authUsers.UpdateAsync(au, ct);
     }
 
     // ----------------------------------------------------------------------
@@ -97,19 +110,47 @@ public sealed class UserService
     // ----------------------------------------------------------------------
     public async Task<bool> UpdateRoleAsync(Guid userId, UserRole newRole, CancellationToken ct)
     {
-        var auth = await _authUsers.GetByUserIdAsync(userId, ct);
-        if (auth is null) return false;
+        if (userId == Guid.Empty)
+            throw new ValidationException("Invalid user id.");
 
-        auth.Role = newRole;
-        return await _authUsers.UpdateAsync(auth, ct);
+        var au = await _authUsers.GetByUserIdAsync(userId, ct);
+        if (au is null)
+            throw new NotFoundException("User not found.");
+
+        au.Role = newRole;
+        return await _authUsers.UpdateAsync(au, ct);
     }
 
     // ----------------------------------------------------------------------
-    // ADMIN: DELETE USER
+    // ADMIN: DELETE USER (soft-delete users, soft-delete auth, or hard as per repos)
     // ----------------------------------------------------------------------
     public async Task<bool> DeleteAsync(Guid userId, CancellationToken ct)
     {
+        if (userId == Guid.Empty)
+            throw new ValidationException("Invalid user id.");
+
+        // Delete auth first, then user (repos define soft/hard behavior)
         await _authUsers.DeleteAsync(userId, ct);
         return await _users.DeleteAsync(userId, ct);
     }
+
+    // ---------------------- Mapping helpers -------------------------------
+    private static UserDto ToUserDto(Models.UsersAndAuth.User u, UserRole role) => new()
+    {
+        Id          = u.Id,
+        Email       = u.Email,
+        DisplayName = u.DisplayName,
+        AvatarUrl   = u.AvatarUri,
+        Role        = role
+    };
+
+    private static UserSelfDto ToUserSelfDto(Models.UsersAndAuth.User u) => new()
+    {
+        Id          = u.Id,
+        Email       = u.Email,
+        DisplayName = u.DisplayName,
+        AvatarUrl   = u.AvatarUri,
+        Prefs       = u.Prefs is null ? new() : JsonSerializer.Deserialize<object>(u.Prefs.RootElement.GetRawText()) ?? new(),
+        CreatedAt   = u.CreatedAt
+    };
 }

@@ -1,243 +1,221 @@
-﻿using System.Text.Json;
+﻿using System.Security.Cryptography;
+using System.Text.Json;
 using StickyBoard.Api.Auth;
-using StickyBoard.Api.DTOs.Auth;
-using StickyBoard.Api.DTOs.Users;
-using StickyBoard.Api.Models.Enums;
-using StickyBoard.Api.Models.Users;
-using StickyBoard.Api.Repositories;
+using StickyBoard.Api.Common.Exceptions;
+using StickyBoard.Api.DTOs;
+using StickyBoard.Api.Models;
+using StickyBoard.Api.Models.UsersAndAuth;
+using StickyBoard.Api.Repositories.UsersAndAuth;
 
 namespace StickyBoard.Api.Services;
 
-public sealed class AuthService : IAuthService
+public sealed class AuthService
 {
+    // Match DB default 'now() + interval ''30 days''' for refresh tokens
+    private const int RefreshTokenDays = 30;
+
     private readonly UserRepository _users;
     private readonly AuthUserRepository _auth;
+    private readonly RefreshTokenRepository _refreshTokens;
     private readonly IPasswordHasher _hasher;
     private readonly IJwtTokenService _jwt;
-    private readonly RefreshTokenRepository _refreshTokens;
     private readonly InviteService _inviteService;
 
     public AuthService(
         UserRepository users,
         AuthUserRepository auth,
+        RefreshTokenRepository refreshTokens,
         IPasswordHasher hasher,
         IJwtTokenService jwt,
-        RefreshTokenRepository refreshTokens,
         InviteService inviteService)
     {
         _users = users;
         _auth = auth;
+        _refreshTokens = refreshTokens;
         _hasher = hasher;
         _jwt = jwt;
-        _refreshTokens = refreshTokens;
         _inviteService = inviteService;
     }
 
-
-
     // ----------------------------------------------------------------------
     // REGISTER
+    // NOTE: DTOs for Register aren't in the core contract; we keep it simple
+    // and return the same payload shape as Login (AuthLoginResponse).
     // ----------------------------------------------------------------------
-    public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto dto, CancellationToken ct)
+    public async Task<AuthLoginResponse> RegisterAsync(
+        string email,
+        string password,
+        string displayName,
+        string? inviteToken,
+        CancellationToken ct)
     {
-        // 1) Ensure the email is not already registered
-        var existing = await _users.GetByEmailAsync(dto.Email, ct);
-        if (existing is not null)
-            throw new InvalidOperationException("Email already registered.");
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ValidationException("Email is required.");
+        if (string.IsNullOrWhiteSpace(password))
+            throw new ValidationException("Password is required.");
+        if (string.IsNullOrWhiteSpace(displayName))
+            throw new ValidationException("Display name is required.");
 
-        // 2) Create user profile
+        var existing = await _users.GetByEmailAsync(email, ct);
+        if (existing is not null)
+            throw new ValidationException("Email already registered.");
+
+        // Create user
         var user = new User
         {
-            Email = dto.Email,
-            DisplayName = dto.DisplayName,
+            Email = email,
+            DisplayName = displayName,
             AvatarUri = null,
             Prefs = JsonDocument.Parse("{}")
         };
-
         var userId = await _users.CreateAsync(user, ct);
-        
-        // 3b) Redeem invite if provided
-        if (!string.IsNullOrWhiteSpace(dto.InviteToken))
-        {
-            await _inviteService.RedeemAsync(userId, dto.InviteToken, ct);
-        }
 
-
-        // 3) Create auth record with hashed password
+        // Create auth record
         var au = new AuthUser
         {
-            Id = userId,
-            PasswordHash = _hasher.Hash(dto.Password),
-            Role = UserRole.user
+            UserId = userId,
+            PasswordHash = _hasher.Hash(password),
+            Role = UserRole.user,
+            LastLogin = DateTime.UtcNow
         };
-
         await _auth.CreateAsync(au, ct);
 
-        // 4) Generate access token
-        var token = _jwt.CreateToken(userId, dto.Email, au.Role.ToString());
+        // Optional: redeem invite
+        if (!string.IsNullOrWhiteSpace(inviteToken))
+            await _inviteService.RedeemAsync(userId, inviteToken!, ct);
 
-        // 5) Create refresh token
-        var rawRefresh = Guid.NewGuid().ToString("N");
-        var hash = _hasher.Hash(rawRefresh);
+        // Tokens
+        var (accessToken, refreshRaw) = await IssueTokensAsync(userId, email, au.Role, ct);
 
-        var rt = new RefreshToken
+        // Return Login-shape response with full self profile
+        var createdUser = await _users.GetByIdAsync(userId, ct)
+            ?? throw new NotFoundException("User not found after registration.");
+
+        return new AuthLoginResponse
         {
-            TokenHash = hash,
-            UserId = userId,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        };
-
-        await _refreshTokens.CreateAsync(rt, ct);
-
-        // 6) Return combined response
-        return new AuthResponseDto
-        {
-            Token = token,
-            RefreshToken = rawRefresh,
-            User = new UserDto
-            {
-                Id = userId,
-                Email = dto.Email,
-                DisplayName = dto.DisplayName,
-                AvatarUri = null,
-                Role = au.Role
-            }
+            AccessToken = accessToken,
+            RefreshToken = refreshRaw,
+            User = ToSelfDto(createdUser)
         };
     }
 
     // ----------------------------------------------------------------------
     // LOGIN
     // ----------------------------------------------------------------------
-    public async Task<AuthResponseDto> LoginAsync(LoginRequestDto dto, CancellationToken ct)
+    public async Task<AuthLoginResponse> LoginAsync(AuthLoginRequest dto, CancellationToken ct)
     {
-        // 1) Find user by email
+        if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
+            throw new ValidationException("Email and password are required.");
+
         var user = await _users.GetByEmailAsync(dto.Email, ct);
         if (user is null)
-            throw new UnauthorizedAccessException("Invalid credentials.");
+            throw new AuthInvalidException("Invalid credentials");
 
-        // 2) Get the corresponding auth record
-        var auth = await _auth.GetByUserIdAsync(user.Id, ct);
-        if (auth is null || !_hasher.Verify(dto.Password, auth.PasswordHash))
-            throw new UnauthorizedAccessException("Invalid credentials.");
-        // Update last login timestamp
-        auth.LastLogin = DateTime.UtcNow;
-        await _auth.UpdateAsync(auth, ct);
+        var au = await _auth.GetByUserIdAsync(user.Id, ct);
+        if (au is null || !_hasher.Verify(dto.Password, au.PasswordHash))
+            throw new AuthInvalidException("Invalid credentials");
 
+        await _auth.UpdateLastLoginAsync(user.Id, ct);
 
-        // 3) Create short-lived access token
-        var token = _jwt.CreateToken(user.Id, user.Email, auth.Role.ToString());
+        var (accessToken, refreshRaw) = await IssueTokensAsync(user.Id, user.Email, au.Role, ct);
 
-        // 4) Issue refresh token
-        var rawRefresh = Guid.NewGuid().ToString("N");
-        var hash = _hasher.Hash(rawRefresh);
-
-        var rt = new RefreshToken
+        return new AuthLoginResponse
         {
-            TokenHash = hash,
-            UserId = user.Id,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        };
-
-        await _refreshTokens.CreateAsync(rt, ct);
-
-        // 5) Return full payload
-        return new AuthResponseDto
-        {
-            Token = token,
-            RefreshToken = rawRefresh,
-            User = new UserDto
-            {
-                Id = user.Id,
-                Email = user.Email,
-                DisplayName = user.DisplayName,
-                AvatarUri = user.AvatarUri,
-                Role = auth.Role
-            }
+            AccessToken = accessToken,
+            RefreshToken = refreshRaw,
+            User = ToSelfDto(user)
         };
     }
 
     // ----------------------------------------------------------------------
-    // REFRESH TOKEN FLOW
+    // REFRESH TOKEN
     // ----------------------------------------------------------------------
-    public async Task<AuthResponseDto> RefreshAsync(Guid userId,string refreshToken, CancellationToken ct)
+    public async Task<AuthRefreshResponse> RefreshAsync(AuthRefreshRequest dto, CancellationToken ct)
     {
-        // 1) Fetch all refresh tokens (small set) and verify hash match
-        var all = await _refreshTokens.GetByUserIdAsync(userId, ct);
-        var match = all.FirstOrDefault(t => _hasher.Verify(refreshToken, t.TokenHash));
+        if (string.IsNullOrWhiteSpace(dto.RefreshToken))
+            throw new ValidationException("Refresh token is required.");
 
+        // Hash incoming raw token
+        var hashed = _hasher.Hash(dto.RefreshToken);
 
-        if (match is null || match.ExpiresAt < DateTime.UtcNow || match.Revoked)
-            throw new UnauthorizedAccessException("Invalid or expired refresh token.");
+        // Direct lookup by hashed token (revoked + expiry handled in repo)
+        var token = await _refreshTokens.GetByHashAsync(hashed, ct);
+        if (token is null)
+            throw new AuthExpiredException("Invalid or expired refresh token.");
 
-        // 2) Rotate old token
-        match.Revoked = true;
-        await _refreshTokens.UpdateAsync(match, ct);
+        // Rotate: revoke old, issue new
+        token.Revoked = true;
+        await _refreshTokens.UpdateAsync(token, ct);
 
-        // 3) Load user and auth records
-        var user = await _users.GetByIdAsync(match.UserId, ct);
-        if (user is null)
-            throw new UnauthorizedAccessException("User not found.");
+        // Load user and auth record
+        var user = await _users.GetByIdAsync(token.UserId, ct)
+                   ?? throw new NotFoundException("User not found.");
 
-        var auth = await _auth.GetByUserIdAsync(user.Id, ct);
-        if (auth is null)
-            throw new UnauthorizedAccessException("Invalid auth record.");
+        var au = await _auth.GetByUserIdAsync(user.Id, ct)
+                 ?? throw new AuthInvalidException("Auth record missing.");
 
-        // 4) Create new tokens
-        var newAccess = _jwt.CreateToken(user.Id, user.Email, auth.Role.ToString());
-        var newRaw = Guid.NewGuid().ToString("N");
-        var newHash = _hasher.Hash(newRaw);
+        // Issue new pair
+        var (access, newRefreshRaw) = await IssueTokensAsync(user.Id, user.Email, au.Role, ct);
 
-        var newRt = new RefreshToken
+        return new AuthRefreshResponse
         {
-            TokenHash = newHash,
-            UserId = user.Id,
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
-        };
-        await _refreshTokens.CreateAsync(newRt, ct);
-
-        // 5) Return updated session payload
-        return new AuthResponseDto
-        {
-            Token = newAccess,
-            RefreshToken = newRaw,
-            User = new UserDto
-            {
-                Id = user.Id,
-                Email = user.Email,
-                DisplayName = user.DisplayName,
-                AvatarUri = user.AvatarUri,
-                Role = auth.Role
-            }
+            AccessToken = access,
+            RefreshToken = newRefreshRaw
         };
     }
 
+
     // ----------------------------------------------------------------------
-    // LOGOUT (Revoke all refresh tokens)
+    // LOGOUT (revoke all refresh tokens for the user)
     // ----------------------------------------------------------------------
     public async Task<bool> LogoutAsync(Guid userId, CancellationToken ct)
     {
+        if (userId == Guid.Empty) return true;
         await _refreshTokens.RevokeAllAsync(userId, ct);
         return true;
     }
 
     // ----------------------------------------------------------------------
-    // ME (Authenticated user)
+    // ME / SELF PROFILE
     // ----------------------------------------------------------------------
-    public async Task<UserDto?> GetMeAsync(Guid userId, CancellationToken ct)
+    public async Task<UserSelfDto?> GetSelfAsync(Guid userId, CancellationToken ct)
     {
+        if (userId == Guid.Empty) return null;
         var user = await _users.GetByIdAsync(userId, ct);
-        if (user is null)
-            return null;
-
-        var auth = await _auth.GetByUserIdAsync(user.Id, ct);
-
-        return new UserDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            DisplayName = user.DisplayName,
-            AvatarUri = user.AvatarUri,
-            Role = auth?.Role ?? UserRole.user
-        };
+        return user is null ? null : ToSelfDto(user);
     }
+
+    // ----------------------------------------------------------------------
+    // Helpers
+    // ----------------------------------------------------------------------
+    private async Task<(string access, string refreshRaw)> IssueTokensAsync(
+        Guid userId, string email, UserRole role, CancellationToken ct)
+    {
+        var access = _jwt.CreateToken(userId, email, role.ToString());
+
+        // 256-bit random token, hex-encoded
+        var refreshRaw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        var refreshHash = _hasher.Hash(refreshRaw);
+
+        var rt = new RefreshToken
+        {
+            TokenHash = refreshHash,
+            UserId = userId,
+            ExpiresAt = DateTime.UtcNow.AddDays(RefreshTokenDays),
+            Revoked = false
+        };
+        await _refreshTokens.CreateAsync(rt, ct);
+
+        return (access, refreshRaw);
+    }
+
+    private static UserSelfDto ToSelfDto(User u) => new UserSelfDto
+    {
+        Id = u.Id,
+        Email = u.Email,
+        DisplayName = u.DisplayName,
+        AvatarUrl = u.AvatarUri,
+        Prefs = u.Prefs,
+        CreatedAt = u.CreatedAt
+    };
 }

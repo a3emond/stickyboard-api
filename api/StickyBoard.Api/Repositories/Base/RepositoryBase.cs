@@ -1,8 +1,8 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 using Npgsql;
+using StickyBoard.Api.Common;
 using StickyBoard.Api.Models.Base;
-using StickyBoard.Api.Repositories.Base; // for MappingHelper
 
 namespace StickyBoard.Api.Repositories.Base
 {
@@ -16,37 +16,33 @@ namespace StickyBoard.Api.Repositories.Base
         }
 
         // ------------------------------------------------------------
-        // CONNECTION
+        // Connection
         // ------------------------------------------------------------
         public async Task<NpgsqlConnection> OpenAsync(CancellationToken ct)
         {
-            var conn = await _dataSource.OpenConnectionAsync(ct);
-            return conn;
+            return await _dataSource.OpenConnectionAsync(ct);
         }
 
         protected string TableName =>
-            typeof(T).GetCustomAttribute<TableAttribute>()?.Name ?? typeof(T).Name.ToLowerInvariant();
+            typeof(T).GetCustomAttribute<TableAttribute>()?.Name
+            ?? typeof(T).Name.ToLowerInvariant();
 
         // ------------------------------------------------------------
-        // MAPPING
+        // Mapping
         // ------------------------------------------------------------
-
-        // Legacy pattern support: still requires each repo to implement Map(reader)
         protected abstract T Map(NpgsqlDataReader reader);
 
-        // Optional generic fallback using MappingHelper
-        protected T MapEntity(NpgsqlDataReader reader) => MappingHelper.MapEntity<T>(reader);
+        protected T MapEntity(NpgsqlDataReader reader) =>
+            MappingHelper.MapEntity<T>(reader);
 
-        // Shared helper for list mapping
         protected async Task<List<T>> MapReaderToListAsync(NpgsqlDataReader reader, CancellationToken ct)
         {
             var list = new List<T>();
             while (await reader.ReadAsync(ct))
-                list.Add(Map(reader)); // still calls the repository-specific Map() override
+                list.Add(Map(reader));
             return list;
         }
 
-        // Synchronous variant if you ever need it (used below)
         protected List<T> MapReaderToList(NpgsqlDataReader reader)
         {
             var list = new List<T>();
@@ -56,12 +52,17 @@ namespace StickyBoard.Api.Repositories.Base
         }
 
         // ------------------------------------------------------------
-        // COMMON CRUD
+        // Read
         // ------------------------------------------------------------
         public virtual async Task<T?> GetByIdAsync(Guid id, CancellationToken ct)
         {
+            var sql = $"SELECT * FROM {TableName} WHERE id = @id";
+
+            if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+                sql += " AND deleted_at IS NULL";
+
             await using var conn = await OpenAsync(ct);
-            await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName} WHERE id = @id", conn);
+            await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("id", id);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -70,37 +71,65 @@ namespace StickyBoard.Api.Repositories.Base
 
         public virtual async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct)
         {
-            var list = new List<T>();
+            var sql = $"SELECT * FROM {TableName}";
+
+            if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+                sql += " WHERE deleted_at IS NULL";
+
             await using var conn = await OpenAsync(ct);
-            await using var cmd = new NpgsqlCommand($"SELECT * FROM {TableName}", conn);
+            await using var cmd = new NpgsqlCommand(sql, conn);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
-            while (await reader.ReadAsync(ct))
-                list.Add(Map(reader));
-
-            return list;
+            return await MapReaderToListAsync(reader, ct);
         }
 
         // ------------------------------------------------------------
-        // SYNC SUPPORT (delta fetch)
+        // Sync / Delta Query
         // ------------------------------------------------------------
         public virtual async Task<IEnumerable<T>> GetUpdatedSinceAsync(DateTime since, CancellationToken ct)
         {
             var sql = $"SELECT * FROM {TableName} WHERE updated_at > @since";
+
+            if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+                sql += " AND deleted_at IS NULL";
 
             await using var conn = await _dataSource.OpenConnectionAsync(ct);
             await using var cmd = new NpgsqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("since", since);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
-            return MapReaderToList(reader); // uses synchronous variant for convenience
+            return MapReaderToList(reader);
         }
 
         // ------------------------------------------------------------
-        // ABSTRACT WRITES
+        // Write (abstract)
         // ------------------------------------------------------------
         public abstract Task<Guid> CreateAsync(T entity, CancellationToken ct);
         public abstract Task<bool> UpdateAsync(T entity, CancellationToken ct);
-        public abstract Task<bool> DeleteAsync(Guid id, CancellationToken ct);
+
+        // ------------------------------------------------------------
+        // Delete — Soft Delete if supported
+        // ------------------------------------------------------------
+        public virtual async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+        {
+            await using var conn = await OpenAsync(ct);
+
+            // Soft delete if supported
+            if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
+            {
+                var sql = $"UPDATE {TableName} SET deleted_at = NOW() WHERE id = @id";
+                await using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("id", id);
+
+                return await cmd.ExecuteNonQueryAsync(ct) > 0;
+            }
+
+            // Hard delete fallback
+            var hardSql = $"DELETE FROM {TableName} WHERE id = @id";
+            await using var hardCmd = new NpgsqlCommand(hardSql, conn);
+            hardCmd.Parameters.AddWithValue("id", id);
+
+            return await hardCmd.ExecuteNonQueryAsync(ct) > 0;
+        }
     }
 }

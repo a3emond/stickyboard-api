@@ -8,6 +8,8 @@ namespace StickyBoard.Api.Repositories.Base
         Task<IEnumerable<T>> GetAllAsync(CancellationToken ct);
         Task<Guid> CreateAsync(T entity, CancellationToken ct);
         Task<bool> UpdateAsync(T entity, CancellationToken ct);
+        
+        // this should soft delete if T supports it
         Task<bool> DeleteAsync(Guid id, CancellationToken ct);
     }
 }

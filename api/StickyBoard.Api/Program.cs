@@ -1,18 +1,19 @@
 using System.Data;
 using System.Text;
-using System.Diagnostics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Npgsql;
 using StickyBoard.Api.Auth;
+using StickyBoard.Api.Common.Filters;
 using StickyBoard.Api.Middleware;
-using StickyBoard.Api.Repositories;
+using StickyBoard.Api.Models;
 using StickyBoard.Api.Services;
-using StickyBoard.Api.Models.Enums;
-using StickyBoard.Api.Repositories.FilesAndOps;
-using StickyBoard.Api.Repositories.SectionsAndTabs;
+using StickyBoard.Api.Repositories.BoardsAndCards;
+using StickyBoard.Api.Repositories.Organizations;
+using StickyBoard.Api.Repositories.SocialAndMessaging;
+using StickyBoard.Api.Repositories.UsersAndAuth;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -51,16 +52,13 @@ dataSourceBuilder.MapEnum<BoardRole>("board_role");
 dataSourceBuilder.MapEnum<OrgRole>("org_role");
 dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
 dataSourceBuilder.MapEnum<TabScope>("tab_scope");
+dataSourceBuilder.MapEnum<TabType>("tab_type");
 dataSourceBuilder.MapEnum<CardType>("card_type");
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
-dataSourceBuilder.MapEnum<LinkType>("link_type");
-dataSourceBuilder.MapEnum<ClusterType>("cluster_type");
-dataSourceBuilder.MapEnum<ActivityType>("activity_type");
-dataSourceBuilder.MapEnum<EntityType>("entity_type");
-dataSourceBuilder.MapEnum<JobKind>("job_kind");
-dataSourceBuilder.MapEnum<JobStatus>("job_status");
 dataSourceBuilder.MapEnum<MessageType>("message_type");
+dataSourceBuilder.MapEnum<MessageStatus>("message_status");
 dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
+
 
 var dataSource = dataSourceBuilder.Build();
 builder.Services.AddSingleton(dataSource);
@@ -70,70 +68,65 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
 
-// --- Core Authentication & Users
-builder.Services.AddScoped<IAuthService, AuthService>();
+// ----------------------------------------------------------
+// Core Auth / Users
+// ----------------------------------------------------------
+builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<RefreshTokenRepository>();
 builder.Services.AddScoped<AuthUserRepository>();
 builder.Services.AddScoped<UserRepository>();
+builder.Services.AddScoped<RefreshTokenRepository>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
-// --- Messaging & Relations
-builder.Services.AddScoped<MessageRepository>();
-builder.Services.AddScoped<MessageService>();
-builder.Services.AddScoped<InviteRepository>();
-builder.Services.AddScoped<InviteService>();
-builder.Services.AddScoped<UserRelationRepository>();
-builder.Services.AddScoped<UserRelationService>();
-
-// --- Boards & Permissions
+// ----------------------------------------------------------
+// Boards / Folders / Permissions / Tabs / Sections / Cards
+// ----------------------------------------------------------
 builder.Services.AddScoped<BoardRepository>();
 builder.Services.AddScoped<BoardService>();
+
+builder.Services.AddScoped<BoardFolderRepository>();
+builder.Services.AddScoped<BoardFolderService>();
+
 builder.Services.AddScoped<PermissionRepository>();
 builder.Services.AddScoped<PermissionService>();
 
-// --- Sections & Tabs
-builder.Services.AddScoped<SectionRepository>();
-builder.Services.AddScoped<SectionService>();
 builder.Services.AddScoped<TabRepository>();
 builder.Services.AddScoped<TabService>();
 
-// --- Cards & Related Entities
+builder.Services.AddScoped<SectionRepository>();
+builder.Services.AddScoped<SectionService>();
+
 builder.Services.AddScoped<CardRepository>();
 builder.Services.AddScoped<CardService>();
-builder.Services.AddScoped<TagRepository>();
-builder.Services.AddScoped<CardTagRepository>();
-builder.Services.AddScoped<LinkRepository>();
-builder.Services.AddScoped<CardRelationsService>();
 
-// --- Organizations
+// ----------------------------------------------------------
+// Card Comments & Board Chat Messages
+// ----------------------------------------------------------
+builder.Services.AddScoped<CardCommentRepository>();
+builder.Services.AddScoped<CardCommentService>();
+
+builder.Services.AddScoped<BoardMessageRepository>();
+builder.Services.AddScoped<BoardMessageService>();
+
+// ----------------------------------------------------------
+// Organizations
+// ----------------------------------------------------------
 builder.Services.AddScoped<OrganizationRepository>();
 builder.Services.AddScoped<OrganizationMemberRepository>();
 builder.Services.AddScoped<OrganizationService>();
 
-// --- Automation (Rules & Clusters)
-builder.Services.AddScoped<RuleRepository>();
-builder.Services.AddScoped<RuleService>();
-builder.Services.AddScoped<ClusterRepository>();
-builder.Services.AddScoped<ClusterService>();
+// ----------------------------------------------------------
+// Messaging / Invites / User Relations
+// ----------------------------------------------------------
+builder.Services.AddScoped<MessageRepository>();
+builder.Services.AddScoped<MessageService>();
 
-// --- Activities (Audit Log)
-builder.Services.AddScoped<ActivityRepository>();
-builder.Services.AddScoped<ActivityService>();
+builder.Services.AddScoped<InviteRepository>();
+builder.Services.AddScoped<InviteService>();
 
-// --- Files & Operations
-builder.Services.AddScoped<FileRepository>();
-builder.Services.AddScoped<FileService>();
-builder.Services.AddScoped<OperationRepository>();
-builder.Services.AddScoped<OperationService>();
-
-// --- Worker / Job Queue
-builder.Services.AddScoped<WorkerJobRepository>();
-builder.Services.AddScoped<WorkerJobAttemptRepository>();
-builder.Services.AddScoped<WorkerJobDeadletterRepository>();
-builder.Services.AddScoped<WorkerJobService>();
-builder.Services.AddScoped<SyncService>();
+builder.Services.AddScoped<UserRelationRepository>();
+builder.Services.AddScoped<UserRelationService>();
 
 // ==========================================================
 // 3. AUTHENTICATION & AUTHORIZATION (JWT + API KEY)
@@ -228,7 +221,7 @@ builder.Services.AddSwaggerGen(options =>
         { apiKeyScheme, new string[] {} }
     });
 
-    options.OperationFilter<StickyBoard.Api.Swagger.DefaultResponsesOperationFilter>();
+    options.OperationFilter<DefaultResponsesOperationFilter>();
     options.OperationFilter<StickyBoard.Api.Common.Filters.ForceJsonContentTypeFilter>();
 });
 
