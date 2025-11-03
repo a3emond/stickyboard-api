@@ -89,4 +89,15 @@ public sealed class AuthController : ControllerBase
 
         return Ok(ApiResponseDto<UserSelfDto>.Ok(me));
     }
+    
+    // ----------------------------------------------------------------------
+    // CLEANUP REVOKED TOKENS (Admin / Maintenance)
+    // ----------------------------------------------------------------------
+    [HttpPost("cleanup")]
+    [Authorize(Roles = "admin")]
+    public async Task<ActionResult<ApiResponseDto<object>>> CleanupRevokedTokens(CancellationToken ct)
+    {
+        var deleted = await _auth.CleanupRevokedTokensAsync(ct);
+        return Ok(ApiResponseDto<object>.Ok(new { deleted }));
+    }
 }

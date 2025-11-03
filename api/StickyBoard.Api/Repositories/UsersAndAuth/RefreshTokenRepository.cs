@@ -134,5 +134,17 @@ namespace StickyBoard.Api.Repositories.UsersAndAuth
 
             return list;
         }
+        
+        // ----------------------------------------------------------------------
+        // CLEANUP REVOKED TOKENS
+        // ----------------------------------------------------------------------
+        public async Task<int> CleanupRevokedAsync(CancellationToken ct)
+        {
+            await using var conn = await OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(
+                "DELETE FROM refresh_tokens WHERE revoked = TRUE", conn);
+
+            return await cmd.ExecuteNonQueryAsync(ct);
+        }
     }
 }

@@ -127,17 +127,20 @@ namespace StickyBoard.Api.DTOs
         public OrgRole Role { get; init; }
     }
     
+    // NOT USED CURRENTLY
+    /*
     public sealed class OrganizationInviteMemberDto
     {
         public Guid UserId { get; init; }
         public OrgRole Role { get; init; } = OrgRole.member;
     }
-
+    
     public sealed class OrganizationUpdateMemberRoleDto
     {
         public OrgRole Role { get; init; }
     }
 
+    */
 
     // ==========================================================
     // 3) Board Folders

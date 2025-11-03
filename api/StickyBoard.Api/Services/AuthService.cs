@@ -135,26 +135,20 @@ public sealed class AuthService
         if (string.IsNullOrWhiteSpace(dto.RefreshToken))
             throw new ValidationException("Refresh token is required.");
 
-        // Hash incoming raw token
         var hashed = _hasher.Hash(dto.RefreshToken);
 
-        // Direct lookup by hashed token (revoked + expiry handled in repo)
+        // Lookup (revoked + expiry handled in repo)
         var token = await _refreshTokens.GetByHashAsync(hashed, ct);
         if (token is null)
             throw new AuthExpiredException("Invalid or expired refresh token.");
 
-        // Rotate: revoke old, issue new
-        token.Revoked = true;
-        await _refreshTokens.UpdateAsync(token, ct);
-
         // Load user and auth record
         var user = await _users.GetByIdAsync(token.UserId, ct)
                    ?? throw new NotFoundException("User not found.");
-
         var au = await _auth.GetByUserIdAsync(user.Id, ct)
                  ?? throw new AuthInvalidException("Auth record missing.");
 
-        // Issue new pair
+        // Issue new pair (automatically revokes all previous)
         var (access, newRefreshRaw) = await IssueTokensAsync(user.Id, user.Email, au.Role, ct);
 
         return new AuthRefreshResponse
@@ -191,12 +185,17 @@ public sealed class AuthService
     private async Task<(string access, string refreshRaw)> IssueTokensAsync(
         Guid userId, string email, UserRole role, CancellationToken ct)
     {
+        // Ensure all previous refresh tokens are revoked
+        await _refreshTokens.RevokeAllAsync(userId, ct);
+
+        // Generate a new access token
         var access = _jwt.CreateToken(userId, email, role.ToString());
 
-        // 256-bit random token, hex-encoded
+        // Generate a new refresh token (256-bit random, hex-encoded)
         var refreshRaw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var refreshHash = _hasher.Hash(refreshRaw);
 
+        // Persist it
         var rt = new RefreshToken
         {
             TokenHash = refreshHash,
@@ -204,11 +203,11 @@ public sealed class AuthService
             ExpiresAt = DateTime.UtcNow.AddDays(RefreshTokenDays),
             Revoked = false
         };
+
         await _refreshTokens.CreateAsync(rt, ct);
 
         return (access, refreshRaw);
     }
-
     private static UserSelfDto ToSelfDto(User u) => new UserSelfDto
     {
         Id = u.Id,
@@ -218,4 +217,12 @@ public sealed class AuthService
         Prefs = u.Prefs,
         CreatedAt = u.CreatedAt
     };
+    
+    // ----------------------------------------------------------------------
+    // CLEANUP REVOKED TOKENS
+    // ----------------------------------------------------------------------
+    public async Task<int> CleanupRevokedTokensAsync(CancellationToken ct)
+    {
+        return await _refreshTokens.CleanupRevokedAsync(ct);
+    }
 }
