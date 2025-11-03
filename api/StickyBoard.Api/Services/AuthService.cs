@@ -135,7 +135,7 @@ public sealed class AuthService
         if (string.IsNullOrWhiteSpace(dto.RefreshToken))
             throw new ValidationException("Refresh token is required.");
 
-        var hashed = _hasher.Hash(dto.RefreshToken);
+        var hashed = _hasher.HashToken(dto.RefreshToken);
 
         // Lookup (revoked + expiry handled in repo)
         var token = await _refreshTokens.GetByHashAsync(hashed, ct);
@@ -193,7 +193,7 @@ public sealed class AuthService
 
         // Generate a new refresh token (256-bit random, hex-encoded)
         var refreshRaw = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        var refreshHash = _hasher.Hash(refreshRaw);
+        var refreshHash = _hasher.HashToken(refreshRaw);
 
         // Persist it
         var rt = new RefreshToken
