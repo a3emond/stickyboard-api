@@ -190,13 +190,15 @@ public class SectionRepository : RepositoryBase<Section>
         await using var cmd = new NpgsqlCommand(@"
         SELECT COALESCE(MAX(position), -1)
         FROM sections
-        WHERE tab_id=@tab
-        AND ((parent_section_id IS NULL AND @parent IS NULL)
-             OR  parent_section_id=@parent)
-        AND deleted_at IS NULL;", conn);
+        WHERE tab_id = @tab
+          AND parent_section_id IS NOT DISTINCT FROM @parent
+          AND deleted_at IS NULL;", conn);
 
         cmd.Parameters.AddWithValue("tab", tabId);
-        cmd.Parameters.AddWithValue("parent", (object?)parentSectionId ?? DBNull.Value);
+
+        // Explicitly type the parameter as UUID so PostgreSQL always knows what $2 is
+        var parentParam = cmd.Parameters.Add("parent", NpgsqlDbType.Uuid);
+        parentParam.Value = parentSectionId.HasValue ? parentSectionId.Value : DBNull.Value;
 
         var result = await cmd.ExecuteScalarAsync(ct);
         return Convert.ToInt32(result);
