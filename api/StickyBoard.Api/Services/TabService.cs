@@ -10,12 +10,14 @@ namespace StickyBoard.Api.Services;
 public sealed class TabService
 {
     private readonly TabRepository _tabs;
+    private readonly SectionRepository _sections;
     private readonly BoardRepository _boards;
     private readonly PermissionRepository _permissions;
 
-    public TabService(TabRepository tabs, BoardRepository boards, PermissionRepository permissions)
+    public TabService(TabRepository tabs, SectionRepository sections, BoardRepository boards, PermissionRepository permissions)
     {
         _tabs = tabs;
+        _sections = sections;
         _boards = boards;
         _permissions = permissions;
     }
@@ -40,6 +42,7 @@ public sealed class TabService
         await EnsureEditorAsync(userId, dto.BoardId, ct);
 
         var newPosition = await _tabs.GetMaxPositionAsync(dto.BoardId, ct) + 1;
+        var now = DateTime.UtcNow;
 
         var tab = new Tab
         {
@@ -48,11 +51,28 @@ public sealed class TabService
             TabType = dto.TabType,
             Position = newPosition,
             LayoutConfig = JsonSerializer.SerializeToDocument(dto.Layout ?? new { }),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
-        return await _tabs.CreateAsync(tab, ct);
+        Guid tabId = await _tabs.CreateAsync(tab, ct);
+        
+
+        // 2) Create default root section bound to the actual tabId we just received
+        var rootSection = new Section
+        {
+            // Id intentionally not set — let repo/DB generate it
+            TabId           = tabId,
+            ParentSectionId = null,
+            Title           = "Root",
+            Position        = 0,
+            LayoutMeta      = JsonDocument.Parse("{}"),
+            CreatedAt       = now,
+            UpdatedAt       = now
+        };
+
+        await _sections.CreateAsync(rootSection, ct);
+        return tab.Id;
     }
 
     // --------------------------------------------------------

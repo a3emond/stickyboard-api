@@ -73,21 +73,7 @@ public sealed class BoardService
             };
 
             tabId = await _tabs.CreateAsync(newTab, ct);
-
-            // 3) Create default root section bound to the actual tabId we just received
-            var rootSection = new Section
-            {
-                // Id intentionally not set — let repo/DB generate it
-                TabId           = tabId,
-                ParentSectionId = null,
-                Title           = "Root",
-                Position        = 0,
-                LayoutMeta      = JsonDocument.Parse("{}"),
-                CreatedAt       = now,
-                UpdatedAt       = now
-            };
-
-            await _sections.CreateAsync(rootSection, ct);
+            // Tab service will handle creating the default root section
 
             return boardId;
         }
