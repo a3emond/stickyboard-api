@@ -54,16 +54,19 @@ public sealed class CardService
 
         var card = new Card
         {
-            BoardId = dto.BoardId,
-            TabId = dto.TabId,
+            BoardId   = dto.BoardId,
+            TabId     = dto.TabId,
             SectionId = dto.SectionId,
-            Type = dto.Type,
-            Title = dto.Title?.Trim(),
-            Content = JsonSerializer.SerializeToDocument(dto.Content ?? new { }),
-            DueDate = dto.DueDate,
-            Priority = dto.Priority,
-            Status = CardStatus.open,
-            Tags = dto.Tags?.ToArray() ?? Array.Empty<string>(),
+            Type      = dto.Type,
+            Title     = dto.Title?.Trim(),
+            Content   = JsonSerializer.SerializeToDocument(dto.Content ?? new { }),
+            InkData   = dto.InkData != null 
+                ? JsonSerializer.SerializeToDocument(dto.InkData) 
+                : null,
+            DueDate   = dto.DueDate,
+            Priority  = dto.Priority,
+            Status    = CardStatus.open,
+            Tags      = dto.Tags?.ToArray() ?? Array.Empty<string>(),
             CreatedBy = userId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
@@ -83,18 +86,23 @@ public sealed class CardService
         if (!await EnsureWriteAccess(existing.BoardId, userId, ct))
             throw new ForbiddenException("No write permission.");
 
-        existing.Title = dto.Title?.Trim() ?? existing.Title;
-        existing.Content = dto.Content != null ? JsonSerializer.SerializeToDocument(dto.Content) : existing.Content;
-        existing.Tags = dto.Tags?.ToArray() ?? existing.Tags;
-        existing.Status = dto.Status ?? existing.Status;
-        existing.Priority = dto.Priority != default ? dto.Priority : existing.Priority;
-        existing.AssigneeId = dto.AssigneeId ?? existing.AssigneeId;
-        existing.DueDate = dto.DueDate ?? existing.DueDate;
-        existing.StartTime = dto.StartTime ?? existing.StartTime;
-        existing.EndTime = dto.EndTime ?? existing.EndTime;
-        existing.SectionId = dto.SectionId ?? existing.SectionId;
-        existing.TabId = dto.TabId ?? existing.TabId;
-        existing.UpdatedAt = DateTime.UtcNow;
+        existing.Title       = dto.Title?.Trim() ?? existing.Title;
+        existing.Content     = dto.Content != null 
+            ? JsonSerializer.SerializeToDocument(dto.Content) 
+            : existing.Content;
+        existing.InkData     = dto.InkData != null
+            ? JsonSerializer.SerializeToDocument(dto.InkData)
+            : existing.InkData;
+        existing.Tags        = dto.Tags?.ToArray() ?? existing.Tags;
+        existing.Status      = dto.Status ?? existing.Status;
+        existing.Priority    = dto.Priority != default ? dto.Priority : existing.Priority;
+        existing.AssigneeId  = dto.AssigneeId ?? existing.AssigneeId;
+        existing.DueDate     = dto.DueDate ?? existing.DueDate;
+        existing.StartTime   = dto.StartTime ?? existing.StartTime;
+        existing.EndTime     = dto.EndTime ?? existing.EndTime;
+        existing.SectionId   = dto.SectionId ?? existing.SectionId;
+        existing.TabId       = dto.TabId ?? existing.TabId;
+        existing.UpdatedAt   = DateTime.UtcNow;
 
         return await _cards.UpdateAsync(existing, ct);
     }
@@ -161,20 +169,21 @@ public sealed class CardService
     // -------------------------------------------------------------
     private static CardDto Map(Card e) => new()
     {
-        Id = e.Id,
-        BoardId = e.BoardId,
-        TabId = e.TabId ?? Guid.Empty,
-        SectionId = e.SectionId,
-        Type = e.Type,
-        Title = e.Title,
-        Content = e.Content.Deserialize<object>() ?? new { },
-        Tags = e.Tags.ToList(),
-        Status = e.Status,
-        Priority = e.Priority ?? 0,
+        Id         = e.Id,
+        BoardId    = e.BoardId,
+        TabId      = e.TabId ?? Guid.Empty,
+        SectionId  = e.SectionId,
+        Type       = e.Type,
+        Title      = e.Title,
+        Content    = e.Content.Deserialize<object>() ?? new { },
+        InkData    = e.InkData?.Deserialize<object>(),
+        Tags       = e.Tags.ToList(),
+        Status     = e.Status,
+        Priority   = e.Priority ?? 0,
         AssigneeId = e.AssigneeId,
-        DueDate = e.DueDate,
-        StartTime = e.StartTime,
-        EndTime = e.EndTime,
-        UpdatedAt = e.UpdatedAt
+        DueDate    = e.DueDate,
+        StartTime  = e.StartTime,
+        EndTime    = e.EndTime,
+        UpdatedAt  = e.UpdatedAt
     };
 }

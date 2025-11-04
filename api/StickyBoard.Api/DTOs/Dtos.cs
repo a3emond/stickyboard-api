@@ -328,6 +328,7 @@ namespace StickyBoard.Api.DTOs
         public CardType Type { get; init; }
         public string? Title { get; init; }
         public object? Content { get; init; } = new { };
+        public object? InkData { get; init; }
         public List<string> Tags { get; init; } = new();
         public CardStatus Status { get; init; }
         public int Priority { get; init; }
@@ -346,6 +347,7 @@ namespace StickyBoard.Api.DTOs
         public CardType Type { get; init; }
         public string? Title { get; init; }
         public object? Content { get; init; }
+        public object? InkData { get; init; }
         public List<string>? Tags { get; init; }
         public int Priority { get; init; }
         public Guid? AssigneeId { get; init; }
@@ -356,6 +358,7 @@ namespace StickyBoard.Api.DTOs
     {
         public string? Title { get; init; }
         public object? Content { get; init; }
+        public object? InkData { get; init; }
         public List<string>? Tags { get; init; }
         public CardStatus? Status { get; init; }
         public int Priority { get; init; }
