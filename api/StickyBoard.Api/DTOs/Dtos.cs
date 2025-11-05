@@ -314,8 +314,7 @@ namespace StickyBoard.Api.DTOs
     {
         public int NewPosition { get; init; }
         public Guid? ParentSectionId { get; init; }
-    }
-    
+    } 
     // ==========================================================
     // 7) Cards
     // ==========================================================
@@ -332,6 +331,7 @@ namespace StickyBoard.Api.DTOs
         public List<string> Tags { get; init; } = new();
         public CardStatus Status { get; init; }
         public int Priority { get; init; }
+        public int Position { get; init; }      
         public Guid? AssigneeId { get; init; }
         public DateTime? DueDate { get; init; }
         public DateTime? StartTime { get; init; }
@@ -352,6 +352,7 @@ namespace StickyBoard.Api.DTOs
         public int Priority { get; init; }
         public Guid? AssigneeId { get; init; }
         public DateTime? DueDate { get; init; }
+        public int? Position { get; init; }      
     }
 
     public sealed class CardUpdateDto
@@ -368,6 +369,18 @@ namespace StickyBoard.Api.DTOs
         public DateTime? EndTime { get; init; }
         public Guid? SectionId { get; init; }
         public Guid? TabId { get; init; }
+        public int? Position { get; init; }      
+    }
+
+    public sealed class CardReorderDto
+    {
+        public Guid CardId { get; init; }
+        public int Position { get; init; }
+    }
+
+    public sealed class CardReorderRequest
+    {
+        public List<CardReorderDto> Updates { get; init; } = new();
     }
 
     // ==========================================================

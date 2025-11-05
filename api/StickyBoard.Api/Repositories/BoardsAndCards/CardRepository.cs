@@ -24,13 +24,13 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
                     board_id, tab_id, section_id, type, title,
                     content, ink_data, due_date, start_time, end_time,
                     priority, status, tags, created_by, assignee_id,
-                    version
+                    version, position
                 )
                 VALUES (
                     @board, @tab, @section, @type, @title,
                     @content, @ink, @due, @start, @end,
                     @prio, @status, @tags, @creator, @assignee,
-                    @ver
+                    @ver, @pos
                 )
                 RETURNING id;", conn);
 
@@ -56,12 +56,13 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             cmd.Parameters.AddWithValue("creator", (object?)e.CreatedBy ?? DBNull.Value);
             cmd.Parameters.AddWithValue("assignee", (object?)e.AssigneeId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("ver", e.Version);
+            cmd.Parameters.AddWithValue("pos", e.Position); // ✅ NEW
 
             return (Guid)await cmd.ExecuteScalarAsync(ct);
         }
 
         // ------------------------------------------------------------
-        // UPDATE (soft, bumps version)
+        // UPDATE
         // ------------------------------------------------------------
         public override async Task<bool> UpdateAsync(Card e, CancellationToken ct)
         {
@@ -80,6 +81,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
                     status = @status,
                     tags = @tags,
                     assignee_id = @assignee,
+                    position = @pos,        -- ✅ NEW
                     version = version + 1,
                     updated_at = now()
                 WHERE id = @id AND deleted_at IS NULL;", conn);
@@ -103,6 +105,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             cmd.Parameters.AddWithValue("status", e.Status);
             cmd.Parameters.AddWithValue("tags", e.Tags ?? Array.Empty<string>());
             cmd.Parameters.AddWithValue("assignee", (object?)e.AssigneeId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("pos", e.Position); // NEW
 
             return await cmd.ExecuteNonQueryAsync(ct) > 0;
         }
@@ -144,7 +147,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             await using var cmd = new NpgsqlCommand(@"
                 SELECT * FROM cards
                 WHERE board_id=@b AND deleted_at IS NULL
-                ORDER BY created_at ASC;", conn);
+                ORDER BY position ASC;", conn); // CHANGED
 
             cmd.Parameters.AddWithValue("b", boardId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -159,7 +162,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             await using var cmd = new NpgsqlCommand(@"
                 SELECT * FROM cards
                 WHERE tab_id=@t AND deleted_at IS NULL
-                ORDER BY created_at ASC;", conn);
+                ORDER BY position ASC;", conn); //  CHANGED
 
             cmd.Parameters.AddWithValue("t", tabId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -174,7 +177,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             await using var cmd = new NpgsqlCommand(@"
                 SELECT * FROM cards
                 WHERE section_id=@s AND deleted_at IS NULL
-                ORDER BY created_at ASC;", conn);
+                ORDER BY position ASC;", conn); // CHANGED
 
             cmd.Parameters.AddWithValue("s", sectionId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -189,7 +192,7 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             await using var cmd = new NpgsqlCommand(@"
                 SELECT * FROM cards
                 WHERE assignee_id=@u AND deleted_at IS NULL
-                ORDER BY due_date NULLS LAST;", conn);
+                ORDER BY position ASC;", conn); // CHANGED
 
             cmd.Parameters.AddWithValue("u", userId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -198,28 +201,24 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
         }
 
         // ------------------------------------------------------------
-        // SEARCH
+        // BULK REORDER (for drag & drop)
         // ------------------------------------------------------------
-        public async Task<IEnumerable<Card>> SearchAsync(Guid boardId, string keyword, CancellationToken ct)
+        public async Task BulkUpdatePositionsAsync(IEnumerable<(Guid cardId, int position)> updates, CancellationToken ct)
         {
-            var list = new List<Card>();
             await using var conn = await OpenAsync(ct);
-            await using var cmd = new NpgsqlCommand(@"
-                SELECT * FROM cards
-                WHERE board_id=@b
-                  AND deleted_at IS NULL
-                  AND (
-                        LOWER(title) LIKE LOWER(@kw)
-                        OR (content ->> 'recognizedText') ILIKE @kw
-                      )
-                ORDER BY created_at DESC;", conn);
+            await conn.OpenAsync(ct);
 
-            cmd.Parameters.AddWithValue("b", boardId);
-            cmd.Parameters.AddWithValue("kw", $"%{keyword}%");
+            foreach (var (cardId, position) in updates)
+            {
+                await using var cmd = new NpgsqlCommand(@"
+                    UPDATE cards
+                    SET position = @pos, updated_at = now(), version = version + 1
+                    WHERE id = @id AND deleted_at IS NULL;", conn);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct)) list.Add(Map(reader));
-            return list;
+                cmd.Parameters.AddWithValue("id", cardId);
+                cmd.Parameters.AddWithValue("pos", position);
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
         }
     }
 }

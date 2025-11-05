@@ -47,29 +47,46 @@ public sealed class CardService
     // -------------------------------------------------------------
     // CREATE
     // -------------------------------------------------------------
+    private async Task<int> GetNextPosition(Guid tabId, Guid? sectionId, CancellationToken ct)
+    {
+        // Pull siblings in the same container (section if present, else tab)
+        IEnumerable<Card> siblings = sectionId.HasValue
+            ? await _cards.GetBySectionAsync(sectionId.Value, ct)
+            : await _cards.GetByTabAsync(tabId, ct);
+
+        // If there are no siblings, start at 0; otherwise max + 1
+        // DefaultIfEmpty(-1) ensures Max() always has a value.
+        return siblings
+            .Select(c => c.Position)
+            .DefaultIfEmpty(-1)
+            .Max() + 1;
+    }
+
     public async Task<Guid> CreateAsync(Guid userId, CardCreateDto dto, CancellationToken ct)
     {
         if (!await EnsureWriteAccess(dto.BoardId, userId, ct))
             throw new ForbiddenException("No write permission.");
 
+        int position = dto.Position ?? await GetNextPosition(dto.TabId, dto.SectionId, ct);
+
         var card = new Card
         {
-            BoardId   = dto.BoardId,
-            TabId     = dto.TabId,
-            SectionId = dto.SectionId,
-            Type      = dto.Type,
-            Title     = dto.Title?.Trim(),
-            Content   = JsonSerializer.SerializeToDocument(dto.Content ?? new { }),
-            InkData   = dto.InkData != null 
-                ? JsonSerializer.SerializeToDocument(dto.InkData) 
-                : null,
-            DueDate   = dto.DueDate,
-            Priority  = dto.Priority,
-            Status    = CardStatus.open,
-            Tags      = dto.Tags?.ToArray() ?? Array.Empty<string>(),
-            CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
+            Id         = Guid.NewGuid(),
+            BoardId    = dto.BoardId,
+            TabId      = dto.TabId,
+            SectionId  = dto.SectionId,
+            Type       = dto.Type,
+            Title      = dto.Title?.Trim(),
+            Content    = JsonSerializer.SerializeToDocument(dto.Content ?? new { }),
+            InkData    = dto.InkData != null ? JsonSerializer.SerializeToDocument(dto.InkData) : null,
+            DueDate    = dto.DueDate,
+            Priority   = dto.Priority,
+            Status     = CardStatus.open,
+            Tags       = dto.Tags?.ToArray() ?? Array.Empty<string>(),
+            CreatedBy  = userId,
+            CreatedAt  = DateTime.UtcNow,
+            UpdatedAt  = DateTime.UtcNow,
+            Position   = position
         };
 
         return await _cards.CreateAsync(card, ct);
@@ -102,6 +119,10 @@ public sealed class CardService
         existing.EndTime     = dto.EndTime ?? existing.EndTime;
         existing.SectionId   = dto.SectionId ?? existing.SectionId;
         existing.TabId       = dto.TabId ?? existing.TabId;
+
+        if (dto.Position.HasValue)
+            existing.Position = dto.Position.Value;
+
         existing.UpdatedAt   = DateTime.UtcNow;
 
         return await _cards.UpdateAsync(existing, ct);
@@ -141,7 +162,6 @@ public sealed class CardService
     public async Task<IEnumerable<CardDto>> GetByTabAsync(Guid userId, Guid tabId, CancellationToken ct)
     {
         var cards = await _cards.GetByTabAsync(tabId, ct);
-
         if (!cards.Any()) return Enumerable.Empty<CardDto>();
 
         var boardId = cards.First().BoardId;
@@ -154,7 +174,6 @@ public sealed class CardService
     public async Task<IEnumerable<CardDto>> GetBySectionAsync(Guid userId, Guid sectionId, CancellationToken ct)
     {
         var cards = await _cards.GetBySectionAsync(sectionId, ct);
-
         if (!cards.Any()) return Enumerable.Empty<CardDto>();
 
         var boardId = cards.First().BoardId;
@@ -162,6 +181,24 @@ public sealed class CardService
             throw new ForbiddenException("No access.");
 
         return cards.Select(Map);
+    }
+
+    // -------------------------------------------------------------
+    // REORDER
+    // -------------------------------------------------------------
+    public async Task ReorderAsync(Guid userId, IEnumerable<(Guid cardId, int position)> requests, CancellationToken ct)
+    {
+        // Validate all permissions before writing
+        foreach (var (cardId, _) in requests)
+        {
+            var card = await _cards.GetByIdAsync(cardId, ct)
+                       ?? throw new NotFoundException("Card not found.");
+
+            if (!await EnsureWriteAccess(card.BoardId, userId, ct))
+                throw new ForbiddenException("No write permission.");
+        }
+
+        await _cards.BulkUpdatePositionsAsync(requests, ct);
     }
 
     // -------------------------------------------------------------

@@ -62,4 +62,22 @@ public sealed class CardsController : ControllerBase
         await _service.DeleteAsync(user, id, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
+
+    // -------------------------------------------------------------
+    // BULK REORDER (Drag & Drop)
+    // -------------------------------------------------------------
+    public sealed record ReorderRequest(Guid CardId, int Position);
+
+    [HttpPost("reorder")]
+    public async Task<IActionResult> Reorder([FromBody] IEnumerable<ReorderRequest> request, CancellationToken ct)
+    {
+        var user = User.GetUserId();
+
+        // convert DTO to tuple list
+        var updates = request.Select(x => (x.CardId, x.Position));
+
+        await _service.ReorderAsync(user, updates, ct);
+
+        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+    }
 }
