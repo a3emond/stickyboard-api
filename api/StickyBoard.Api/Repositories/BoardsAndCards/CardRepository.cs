@@ -88,13 +88,14 @@ namespace StickyBoard.Api.Repositories.BoardsAndCards
             cmd.Parameters.AddWithValue("section", (object?)e.SectionId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("tab", (object?)e.TabId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("title", (object?)e.Title ?? DBNull.Value);
+            
+            cmd.Parameters.Add("content", NpgsqlDbType.Jsonb).Value =
+                e.Content.RootElement.GetRawText();
 
-            cmd.Parameters.AddWithValue("content", NpgsqlDbType.Jsonb, e.Content.RootElement.GetRawText());
-            cmd.Parameters.AddWithValue("ink",
+            cmd.Parameters.Add("ink", NpgsqlDbType.Jsonb).Value =
                 e.InkData is null
                     ? DBNull.Value
-                    : (object)new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Jsonb, Value = e.InkData.RootElement.GetRawText() }
-            );
+                    : e.InkData.RootElement.GetRawText();
 
             cmd.Parameters.AddWithValue("due", (object?)e.DueDate ?? DBNull.Value);
             cmd.Parameters.AddWithValue("start", (object?)e.StartTime ?? DBNull.Value);
