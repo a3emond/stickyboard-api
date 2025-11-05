@@ -31,7 +31,7 @@ namespace StickyBoard.Api.Models.BoardsAndCards
         public JsonDocument Content { get; set; } = JsonDocument.Parse("{}");
 
         [Column("ink_data")]
-        public JsonDocument? InkData { get; set; }
+        public JsonDocument? InkData { get; set; } // no default value (should be null if not used)
 
         [Column("due_date")]
         public DateTime? DueDate { get; set; }
@@ -44,9 +44,6 @@ namespace StickyBoard.Api.Models.BoardsAndCards
 
         [Column("priority")]
         public int? Priority { get; set; }
-
-        [Column("position")]
-        public int Position { get; set; } = 0;
 
         [Column("status")]
         public CardStatus Status { get; set; } = CardStatus.open;
@@ -67,7 +64,7 @@ namespace StickyBoard.Api.Models.BoardsAndCards
         public DateTime UpdatedAt { get; set; }
 
         [Column("version")]
-        public int Version { get; set; }
+        public int Version { get; set; } // version tracking (default is 0 - set in the database)
 
         [Column("deleted_at")]
         public DateTime? DeletedAt { get; set; }
