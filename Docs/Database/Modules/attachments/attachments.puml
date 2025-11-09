@@ -1,0 +1,53 @@
+@startuml attachments
+!theme blueprint
+
+entity workspaces {
+ *id : uuid
+}
+entity boards {
+ *id :uuid
+}
+entity cards { 
+*id :uuid
+}
+entity users {
+ *id :uuid 
+}
+
+entity attachments {
+  *id : uuid
+  --
+  workspace_id : uuid
+  board_id : uuid
+  card_id : uuid
+  filename : text
+  storage_path : text
+  uploaded_by : uuid
+}
+
+entity attachment_variants {
+  *id : uuid
+  --
+  parent_id : uuid
+  variant : text
+  storage_path : text
+}
+
+entity file_tokens {
+  *id : uuid
+  --
+  attachment_id : uuid
+  expires_at : timestamptz
+  created_by : uuid
+}
+
+workspaces ||--o{ attachments
+boards ||--o{ attachments
+cards ||--o{ attachments
+
+attachments ||--o{ attachment_variants
+attachments ||--o{ file_tokens
+users ||--o{ attachments : uploader
+users ||--o{ file_tokens : issued_by
+
+@enduml

@@ -1,0 +1,26 @@
+@startuml realtime
+!theme blueprint
+
+entity users {
+ *id : uuid 
+}
+
+entity ws_sessions {
+  *id : bigserial
+  --
+  user_id : uuid
+  node_id : text
+}
+
+entity push_tokens {
+  *id : bigserial
+  --
+  user_id : uuid
+  provider : text
+  token : text
+}
+
+users ||--o{ ws_sessions
+users ||--o{ push_tokens
+
+@enduml

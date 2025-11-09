@@ -1,0 +1,46 @@
+@startuml boards_cards
+!theme blueprint
+
+entity workspaces {
+  *id : uuid
+}
+
+entity boards {
+  *id : uuid
+  --
+  workspace_id : uuid
+  title : text
+  created_by : uuid
+}
+
+entity board_members {
+  *board_id : uuid
+  *user_id : uuid
+  --
+  role : workspace_role
+}
+
+entity views {
+  *id : uuid
+  --
+  board_id : uuid
+  title : text
+  type : view_type
+}
+
+entity cards {
+  *id : uuid
+  --
+  board_id : uuid
+  title : text
+  status : card_status
+  assignee : uuid
+  created_by : uuid
+}
+
+workspaces ||--o{ boards
+boards ||--o{ board_members
+boards ||--o{ views
+boards ||--o{ cards
+
+@enduml

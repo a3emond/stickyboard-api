@@ -1,0 +1,40 @@
+@startuml
+!theme blueprint
+
+entity users { 
+  *id : uuid 
+}
+
+entity boards { 
+  *id : uuid 
+}
+
+entity views { 
+  *id : uuid 
+}
+
+entity messages {
+  *id : uuid
+  --
+  channel : message_channel
+  board_id : uuid
+  view_id : uuid
+  sender_id : uuid
+  parent_id : uuid
+}
+
+entity inbox_messages {
+  *id : uuid
+  --
+  sender_id : uuid
+  receiver_id : uuid
+}
+
+boards ||--o{ messages
+views ||--o{ messages
+users ||--o{ messages : sent
+messages ||--o{ messages : replies
+
+users ||--o{ inbox_messages : sender
+users ||--o{ inbox_messages : receiver
+@enduml

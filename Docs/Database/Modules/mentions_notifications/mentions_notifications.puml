@@ -1,0 +1,30 @@
+@startuml mentions_notifications
+!theme blueprint
+
+entity users { 
+  *id : uuid
+}
+
+entity mentions {
+  *id : uuid
+  --
+  entity_type : text
+  entity_id : uuid
+  mentioned_user : uuid
+  author_id : uuid
+}
+
+entity notifications {
+  *id : uuid
+  --
+  user_id : uuid
+  type : notification_type
+  entity_id : uuid
+  read : boolean
+}
+
+users ||--o{ mentions : mentioned
+users ||--o{ mentions : authored
+users ||--o{ notifications
+
+@enduml
