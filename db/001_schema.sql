@@ -32,12 +32,14 @@ $$ LANGUAGE sql IMMUTABLE;
 -- ENUM TYPES
 -- ============================================================================
 DO $$ BEGIN CREATE TYPE user_role         AS ENUM ('user','admin','moderator');                    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE workspace_role    AS ENUM ('owner','admin','member','guest');              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE workspace_role    AS ENUM ('owner','admin','moderator','member','guest');              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE view_type         AS ENUM ('kanban','list','calendar','timeline','metrics','doc','whiteboard','chat'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE card_status       AS ENUM ('open','in_progress','blocked','done','archived'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE message_channel   AS ENUM ('board','view','direct','system');              EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE notification_type AS ENUM ('mention','reply','assignment','system');       EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE invite_status     AS ENUM ('pending','accepted','revoked','expired');      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+Do $$ BEGIN CREATE TYPE contact_status    AS ENUM ('pending','accepted','blocked')                 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+Do $$ BEGIN CREATE TYPE invite_scope    AS ENUM ('workspace','board','contact')                 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================================================
 -- USERS & AUTH
@@ -93,7 +95,7 @@ CREATE INDEX IF NOT EXISTS ix_rt_validity ON refresh_tokens(revoked, expires_at)
 CREATE TABLE IF NOT EXISTS user_contacts (
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   contact_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status      text NOT NULL DEFAULT 'pending', -- pending | accepted | blocked
+  status      contact_status NOT NULL DEFAULT 'pending', -- pending | accepted | blocked
   created_at  timestamptz NOT NULL DEFAULT now(),
   accepted_at timestamptz,
   PRIMARY KEY (user_id, contact_id)
@@ -390,16 +392,21 @@ CREATE INDEX ix_file_tokens_valid
   ON file_tokens(attachment_id, expires_at)
   WHERE revoked = false;
 -- ============================================================================
--- INVITES (WORKSPACE OR BOARD; HASHED TOKEN)
+-- INVITES (WORKSPACE / BOARD / CONTACT; HASHED TOKEN)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS invites (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sender_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   email         text NOT NULL,                                        -- supports non-users
+
+  scope_type    invite_scope NOT NULL,                                -- 'workspace'|'board'|'contact'
   workspace_id  uuid REFERENCES workspaces(id) ON DELETE CASCADE,
   board_id      uuid REFERENCES boards(id)     ON DELETE CASCADE,
+  contact_id    uuid REFERENCES users(id)      ON DELETE CASCADE,      -- optional; can be null for non-user contact
+
   target_role   workspace_role,                                       -- for workspace scope
   board_role    workspace_role,                                       -- optional board override
+
   token_hash    text NOT NULL UNIQUE,                                 -- store hash of opaque token
   status        invite_status NOT NULL DEFAULT 'pending',
   accepted_by   uuid REFERENCES users(id),
@@ -408,15 +415,39 @@ CREATE TABLE IF NOT EXISTS invites (
   created_at    timestamptz NOT NULL DEFAULT now(),
   expires_at    timestamptz NOT NULL DEFAULT (now() + interval '7 days'),
   note          text,
-  CONSTRAINT invites_scope_xor CHECK ((workspace_id IS NOT NULL)::int + (board_id IS NOT NULL)::int = 1),
-  CONSTRAINT invites_workspace_role_req CHECK (workspace_id IS NULL OR target_role IS NOT NULL)
+
+  -- Exact scope behaviour:
+  -- workspace: workspace_id set, others null
+  -- board:     board_id set, others null
+  -- contact:   workspace_id/board_id null, contact_id optional (existing user) or null (email-only)
+  CONSTRAINT invites_scope_valid CHECK (
+    (scope_type = 'workspace' AND workspace_id IS NOT NULL AND board_id IS NULL AND contact_id IS NULL) OR
+    (scope_type = 'board'     AND board_id     IS NOT NULL AND workspace_id IS NULL AND contact_id IS NULL) OR
+    (scope_type = 'contact'   AND workspace_id IS NULL     AND board_id     IS NULL)
+  ),
+
+  CONSTRAINT invites_workspace_role_req CHECK (
+    scope_type <> 'workspace' OR target_role IS NOT NULL
+  )
 );
--- Prevent duplicate pending invite for same email+scope
+
+-- Prevent duplicate pending invite for same email+scope (including contact)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invites_email_scope
-  ON invites(email, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(board_id, '00000000-0000-0000-0000-000000000000'::uuid))
+  ON invites(
+      email,
+      scope_type,
+      COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'::uuid),
+      COALESCE(board_id,     '00000000-0000-0000-0000-000000000000'::uuid),
+      COALESCE(contact_id,   '00000000-0000-0000-0000-000000000000'::uuid)
+  )
   WHERE status = 'pending';
-CREATE INDEX IF NOT EXISTS ix_invites_scope_time ON invites(workspace_id, board_id, created_at);
-CREATE INDEX IF NOT EXISTS ix_invites_status_exp ON invites(status, expires_at);
+
+CREATE INDEX IF NOT EXISTS ix_invites_scope_time 
+  ON invites(scope_type, workspace_id, board_id, contact_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_invites_status_exp 
+  ON invites(status, expires_at);
+
 
 -- ============================================================================
 -- SYNC PRIMITIVES (OUTBOX, CURSORS, WORKERS, REALTIME)
@@ -834,30 +865,52 @@ CREATE TRIGGER trg_user_contacts_outbox
 AFTER INSERT OR UPDATE OR DELETE ON user_contacts
 FOR EACH ROW EXECUTE FUNCTION emit_user_contact_outbox();
 
+
 -- INVITES
-CREATE OR REPLACE FUNCTION emit_invite_outbox() RETURNS trigger AS $$
-DECLARE payload jsonb;
+CREATE OR REPLACE FUNCTION emit_invite_outbox() 
+RETURNS trigger AS $$
+DECLARE 
+  payload jsonb;
 BEGIN
   IF TG_OP IN ('INSERT','UPDATE') THEN
     payload := jsonb_build_object(
-      'id', NEW.id,
-      'email', NEW.email,
-      'status', NEW.status,
-      'workspace_id', NEW.workspace_id,
-      'board_id', NEW.board_id,
-      'target_role', NEW.target_role,
-      'board_role', NEW.board_role,
-      'created_at', NEW.created_at,
-      'expires_at', NEW.expires_at,
-      'accepted_at', NEW.accepted_at,
-      'accepted_by', NEW.accepted_by
+      'id',            NEW.id,
+      'email',         NEW.email,
+      'scope_type',    NEW.scope_type,
+      'status',        NEW.status,
+      'workspace_id',  NEW.workspace_id,
+      'board_id',      NEW.board_id,
+      'contact_id',    NEW.contact_id,
+      'target_role',   NEW.target_role,
+      'board_role',    NEW.board_role,
+      'created_at',    NEW.created_at,
+      'expires_at',    NEW.expires_at,
+      'accepted_at',   NEW.accepted_at,
+      'accepted_by',   NEW.accepted_by,
+      'revoked_at',    NEW.revoked_at
     );
+
     INSERT INTO event_outbox(topic, entity_id, workspace_id, board_id, op, payload)
-    VALUES ('invite', NEW.id, NEW.workspace_id, NEW.board_id, 'upsert', payload);
+    VALUES (
+      'invite',
+      NEW.id,
+      NEW.workspace_id,
+      NEW.board_id,
+      'upsert',
+      payload
+    );
   ELSIF TG_OP = 'DELETE' THEN
     INSERT INTO event_outbox(topic, entity_id, workspace_id, board_id, op, payload)
-    VALUES ('invite', OLD.id, OLD.workspace_id, OLD.board_id, 'delete', to_jsonb(OLD));
+    VALUES (
+      'invite',
+      OLD.id,
+      OLD.workspace_id,
+      OLD.board_id,
+      'delete',
+      to_jsonb(OLD)
+    );
   END IF;
+
   RETURN COALESCE(NEW, OLD);
 END; $$ LANGUAGE plpgsql;
 
@@ -866,37 +919,81 @@ CREATE TRIGGER trg_invites_outbox
 AFTER INSERT OR UPDATE OR DELETE ON invites
 FOR EACH ROW EXECUTE FUNCTION emit_invite_outbox();
 
+
+
 -- ============================================================================
 -- INVITE HELPERS (SERVER-SIDE CONVENIENCE)
 -- ============================================================================
+
 -- Create an invite row given a pre-hashed token (hash on app side or via sha256_hex)
 CREATE OR REPLACE FUNCTION invite_create(
-  p_sender uuid,
-  p_email text,
-  p_workspace uuid,
-  p_board uuid,
-  p_target_role workspace_role,
-  p_board_role workspace_role,
-  p_token_hash text,
-  p_expires_in interval DEFAULT interval '7 days',
-  p_note text DEFAULT NULL
+  p_sender       uuid,
+  p_email        text,
+  p_scope_type   invite_scope,
+  p_workspace    uuid,
+  p_board        uuid,
+  p_contact      uuid,
+  p_target_role  workspace_role,
+  p_board_role   workspace_role,
+  p_token_hash   text,
+  p_expires_in   interval DEFAULT interval '7 days',
+  p_note         text DEFAULT NULL
 ) RETURNS uuid AS $$
-DECLARE v_id uuid;
+DECLARE 
+  v_id uuid;
 BEGIN
-  INSERT INTO invites(id, sender_id, email, workspace_id, board_id, target_role, board_role, token_hash, expires_at, note)
-  VALUES (gen_random_uuid(), p_sender, p_email, p_workspace, p_board, p_target_role, p_board_role, p_token_hash, now() + p_expires_in, p_note)
+  INSERT INTO invites (
+    id,
+    sender_id,
+    email,
+    scope_type,
+    workspace_id,
+    board_id,
+    contact_id,
+    target_role,
+    board_role,
+    token_hash,
+    expires_at,
+    note
+  )
+  VALUES (
+    gen_random_uuid(),
+    p_sender,
+    p_email,
+    p_scope_type,
+    p_workspace,
+    p_board,
+    p_contact,
+    p_target_role,
+    p_board_role,
+    p_token_hash,
+    now() + p_expires_in,
+    p_note
+  )
   RETURNING id INTO v_id;
+
   RETURN v_id;
 END; $$ LANGUAGE plpgsql;
 
--- Accept an invite by token hash and upsert membership
+
+-- Accept an invite by token hash and upsert membership / contacts
 CREATE OR REPLACE FUNCTION invite_accept(
-  p_token_hash text,
+  p_token_hash     text,
   p_accepting_user uuid
-) RETURNS TABLE(invite_id uuid, workspace_id uuid, board_id uuid, target_role workspace_role, board_role workspace_role) AS $$
-DECLARE v_inv invites;
+) RETURNS TABLE(
+  invite_id    uuid,
+  scope_type   invite_scope,
+  workspace_id uuid,
+  board_id     uuid,
+  contact_id   uuid,
+  target_role  workspace_role,
+  board_role   workspace_role
+) AS $$
+DECLARE 
+  v_inv invites;
 BEGIN
-  SELECT * INTO v_inv FROM invites
+  SELECT * INTO v_inv
+  FROM invites
   WHERE token_hash = p_token_hash
     AND status = 'pending'
     AND now() < expires_at
@@ -906,32 +1003,66 @@ BEGIN
     RAISE EXCEPTION 'invalid_or_expired_invite';
   END IF;
 
-  IF v_inv.workspace_id IS NOT NULL THEN
+  -- Workspace membership
+  IF v_inv.scope_type = 'workspace' AND v_inv.workspace_id IS NOT NULL THEN
     INSERT INTO workspace_members(workspace_id, user_id, role)
     VALUES (v_inv.workspace_id, p_accepting_user, COALESCE(v_inv.target_role, 'member'))
     ON CONFLICT (workspace_id, user_id) DO UPDATE
       SET role = GREATEST(EXCLUDED.role, workspace_members.role);
   END IF;
 
-  IF v_inv.board_id IS NOT NULL THEN
+  -- Board membership
+  IF v_inv.scope_type = 'board' AND v_inv.board_id IS NOT NULL THEN
     INSERT INTO board_members(board_id, user_id, role)
     VALUES (v_inv.board_id, p_accepting_user, COALESCE(v_inv.board_role, 'member'))
     ON CONFLICT (board_id, user_id) DO UPDATE
       SET role = GREATEST(EXCLUDED.role, board_members.role);
   END IF;
 
+  -- Contact friendship reciprocity
+  IF v_inv.scope_type = 'contact' THEN
+    -- If the invite was created for a specific known user, use that
+    -- Otherwise, treat sender and accepting user as contacts.
+    -- We always create a symmetric friendship between sender and accepter.
+    INSERT INTO user_contacts(user_id, contact_id, status, created_at, accepted_at)
+    VALUES (v_inv.sender_id, p_accepting_user, 'accepted', now(), now())
+    ON CONFLICT (user_id, contact_id) DO UPDATE
+      SET status      = 'accepted',
+          accepted_at = COALESCE(user_contacts.accepted_at, EXCLUDED.accepted_at);
+
+    INSERT INTO user_contacts(user_id, contact_id, status, created_at, accepted_at)
+    VALUES (p_accepting_user, v_inv.sender_id, 'accepted', now(), now())
+    ON CONFLICT (user_id, contact_id) DO UPDATE
+      SET status      = 'accepted',
+          accepted_at = COALESCE(user_contacts.accepted_at, EXCLUDED.accepted_at);
+  END IF;
+
+  -- Mark invite as accepted
   UPDATE invites
-     SET status='accepted', accepted_at=now(), accepted_by=p_accepting_user
-   WHERE id=v_inv.id;
+     SET status      = 'accepted',
+         accepted_at = now(),
+         accepted_by = p_accepting_user
+   WHERE id = v_inv.id;
 
   RETURN QUERY
-  SELECT v_inv.id, v_inv.workspace_id, v_inv.board_id, v_inv.target_role, v_inv.board_role;
+  SELECT
+    v_inv.id,
+    v_inv.scope_type,
+    v_inv.workspace_id,
+    v_inv.board_id,
+    v_inv.contact_id,
+    v_inv.target_role,
+    v_inv.board_role;
 END; $$ LANGUAGE plpgsql;
+
 
 -- Revoke a pending invite
-CREATE OR REPLACE FUNCTION invite_revoke(p_token_hash text) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION invite_revoke(p_token_hash text) 
+RETURNS void AS $$
 BEGIN
-  UPDATE invites SET status='revoked', revoked_at=now()
-  WHERE token_hash=p_token_hash AND status='pending';
+  UPDATE invites 
+     SET status    = 'revoked',
+         revoked_at = now()
+   WHERE token_hash = p_token_hash
+     AND status     = 'pending';
 END; $$ LANGUAGE plpgsql;
-

@@ -316,30 +316,55 @@ CREATE TRIGGER trg_user_contacts_outbox
 AFTER INSERT OR UPDATE OR DELETE ON user_contacts
 FOR EACH ROW EXECUTE FUNCTION emit_user_contact_outbox();
 
+-- ============================================================================
+-- INVITES OUTBOX EMITTER
+-- ============================================================================
+
 -- INVITES
-CREATE OR REPLACE FUNCTION emit_invite_outbox() RETURNS trigger AS $$
-DECLARE payload jsonb;
+CREATE OR REPLACE FUNCTION emit_invite_outbox() 
+RETURNS trigger AS $$
+DECLARE 
+  payload jsonb;
 BEGIN
   IF TG_OP IN ('INSERT','UPDATE') THEN
     payload := jsonb_build_object(
-      'id', NEW.id,
-      'email', NEW.email,
-      'status', NEW.status,
-      'workspace_id', NEW.workspace_id,
-      'board_id', NEW.board_id,
-      'target_role', NEW.target_role,
-      'board_role', NEW.board_role,
-      'created_at', NEW.created_at,
-      'expires_at', NEW.expires_at,
-      'accepted_at', NEW.accepted_at,
-      'accepted_by', NEW.accepted_by
+      'id',            NEW.id,
+      'email',         NEW.email,
+      'scope_type',    NEW.scope_type,
+      'status',        NEW.status,
+      'workspace_id',  NEW.workspace_id,
+      'board_id',      NEW.board_id,
+      'contact_id',    NEW.contact_id,
+      'target_role',   NEW.target_role,
+      'board_role',    NEW.board_role,
+      'created_at',    NEW.created_at,
+      'expires_at',    NEW.expires_at,
+      'accepted_at',   NEW.accepted_at,
+      'accepted_by',   NEW.accepted_by,
+      'revoked_at',    NEW.revoked_at
     );
+
     INSERT INTO event_outbox(topic, entity_id, workspace_id, board_id, op, payload)
-    VALUES ('invite', NEW.id, NEW.workspace_id, NEW.board_id, 'upsert', payload);
+    VALUES (
+      'invite',
+      NEW.id,
+      NEW.workspace_id,
+      NEW.board_id,
+      'upsert',
+      payload
+    );
   ELSIF TG_OP = 'DELETE' THEN
     INSERT INTO event_outbox(topic, entity_id, workspace_id, board_id, op, payload)
-    VALUES ('invite', OLD.id, OLD.workspace_id, OLD.board_id, 'delete', to_jsonb(OLD));
+    VALUES (
+      'invite',
+      OLD.id,
+      OLD.workspace_id,
+      OLD.board_id,
+      'delete',
+      to_jsonb(OLD)
+    );
   END IF;
+
   RETURN COALESCE(NEW, OLD);
 END; $$ LANGUAGE plpgsql;
 

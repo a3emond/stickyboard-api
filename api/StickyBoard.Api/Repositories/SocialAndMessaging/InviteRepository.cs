@@ -1,140 +1,230 @@
 ﻿using Npgsql;
 using StickyBoard.Api.Common;
+using StickyBoard.Api.DTOs.SocialAndMessaging;
+using StickyBoard.Api.Models;
 using StickyBoard.Api.Models.SocialAndMessaging;
 using StickyBoard.Api.Repositories.Base;
-using NpgsqlTypes;
+using StickyBoard.Api.Repositories.SocialAndMessaging.Contracts;
 
 namespace StickyBoard.Api.Repositories.SocialAndMessaging;
 
-public class InviteRepository : RepositoryBase<Invite>
+public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
 {
-    public InviteRepository(NpgsqlDataSource dataSource) : base(dataSource) { }
+    public InviteRepository(NpgsqlDataSource db) : base(db) { }
 
+    // =====================================================================
+    // Mapping
+    // =====================================================================
     protected override Invite Map(NpgsqlDataReader r)
         => MappingHelper.MapEntity<Invite>(r);
 
-    public override async Task<Guid> CreateAsync(Invite e, CancellationToken ct)
+    // =====================================================================
+    // CREATE via DB helper (invite_create)
+    // =====================================================================
+    public async Task<Guid> CreateViaDbFunctionAsync(
+        Guid senderId,
+        string email,
+        InviteScope scopeType,
+        Guid? workspaceId,
+        Guid? boardId,
+        Guid? contactId,
+        WorkspaceRole? targetRole,
+        WorkspaceRole? boardRole,
+        string tokenHash,
+        TimeSpan expiresIn,
+        string? note,
+        CancellationToken ct)
     {
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            INSERT INTO invites (
-                sender_id, email, board_id, org_id,
-                board_role, org_role,
-                token, accepted, expires_at
-            )
-            VALUES (
-                @sender, @email, @board, @org,
-                @boardRole, @orgRole,
-                @token, @accepted, @expires
-            )
-            RETURNING id", conn);
+        const string sql = @"
+            SELECT invite_create(
+                @sender,
+                @em,
+                @scope,
+                @ws,
+                @board,
+                @contact,
+                @trole,
+                @brole,
+                @token_hash,
+                @expires_in,
+                @note
+            ) AS id;
+        ";
 
-        cmd.Parameters.AddWithValue("sender", e.SenderId);
-        cmd.Parameters.AddWithValue("email", e.Email);
-        cmd.Parameters.AddWithValue("board", (object?)e.BoardId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("org", (object?)e.OrgId ?? DBNull.Value);
-
-        cmd.Parameters.AddWithValue("boardRole",
-            e.BoardRole.HasValue ? e.BoardRole.Value : (object)DBNull.Value);
-
-        cmd.Parameters.AddWithValue("orgRole",
-            e.OrgRole.HasValue ? e.OrgRole.Value : (object)DBNull.Value);
-
-        cmd.Parameters.AddWithValue("token", e.Token);
-        cmd.Parameters.AddWithValue("accepted", e.Accepted);
-        cmd.Parameters.AddWithValue("expires", e.ExpiresAt);
-
-        return (Guid)await cmd.ExecuteScalarAsync(ct);
-    }
-
-    public override async Task<bool> UpdateAsync(Invite e, CancellationToken ct)
-    {
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            UPDATE invites
-            SET accepted=@accepted
-            WHERE id=@id", conn);
-
-        cmd.Parameters.AddWithValue("accepted", e.Accepted);
-        cmd.Parameters.AddWithValue("id", e.Id);
-
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
-    }
-
-    public override async Task<bool> DeleteAsync(Guid id, CancellationToken ct)
-    {
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(
-            "DELETE FROM invites WHERE id=@id", conn);
-
-        cmd.Parameters.AddWithValue("id", id);
-        return await cmd.ExecuteNonQueryAsync(ct) > 0;
-    }
-
-    public async Task<Invite?> GetByTokenAsync(string token, CancellationToken ct)
-    {
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            SELECT * FROM invites
-            WHERE token=@token
-              AND expires_at > NOW()", conn);
-
-        cmd.Parameters.AddWithValue("token", token);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        return await reader.ReadAsync(ct) ? Map(reader) : null;
-    }
-
-    public async Task<IEnumerable<Invite>> GetPendingForEmailAsync(string email, CancellationToken ct)
-    {
-        var list = new List<Invite>();
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            SELECT * FROM invites
-            WHERE LOWER(email) = LOWER(@email)
-              AND accepted = FALSE
-              AND expires_at > NOW()", conn);
-
-        cmd.Parameters.AddWithValue("email", email);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            list.Add(Map(reader));
-
-        return list;
-    }
-
-    public async Task<IEnumerable<Invite>> GetPendingBySenderAsync(Guid senderId, CancellationToken ct)
-    {
-        var list = new List<Invite>();
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            SELECT * FROM invites
-            WHERE sender_id=@sender
-              AND accepted = FALSE
-              AND expires_at > NOW()
-            ORDER BY created_at DESC", conn);
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
 
         cmd.Parameters.AddWithValue("sender", senderId);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            list.Add(Map(reader));
-
-        return list;
-    }
-
-    public async Task<bool> CancelIfOwnedAsync(Guid senderId, Guid inviteId, CancellationToken ct)
-    {
-        await using var conn = await OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(@"
-            DELETE FROM invites
-            WHERE id=@id
-              AND sender_id=@sender
-              AND accepted = FALSE
-            RETURNING id;", conn);
-
-        cmd.Parameters.AddWithValue("id", inviteId);
-        cmd.Parameters.AddWithValue("sender", senderId);
+        cmd.Parameters.AddWithValue("em", email);
+        cmd.Parameters.AddWithValue("scope", scopeType.ToString());
+        cmd.Parameters.AddWithValue("ws", (object?)workspaceId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("board", (object?)boardId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("contact", (object?)contactId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("trole", (object?)targetRole ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("brole", (object?)boardRole ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("token_hash", tokenHash);
+        cmd.Parameters.AddWithValue("expires_in", expiresIn);
+        cmd.Parameters.AddWithValue("note", (object?)note ?? DBNull.Value);
 
         var result = await cmd.ExecuteScalarAsync(ct);
-        return result is not null;
+        return (Guid)result!;
     }
+
+    // =====================================================================
+    // ACCEPT via DB helper (invite_accept)
+    // =====================================================================
+    public async Task<InviteAcceptResponseDto?> AcceptViaDbFunctionAsync(
+        string tokenHash,
+        Guid acceptingUserId,
+        CancellationToken ct)
+    {
+        const string sql = @"
+            SELECT 
+                invite_id,
+                scope_type,
+                workspace_id,
+                board_id,
+                contact_id,
+                target_role,
+                board_role
+            FROM invite_accept(@hash, @uid);
+        ";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("hash", tokenHash);
+        cmd.Parameters.AddWithValue("uid", acceptingUserId);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (!await r.ReadAsync(ct))
+            return null;
+
+        return new InviteAcceptResponseDto();
+    }
+
+    // =====================================================================
+    // REVOKE via DB helper
+    // =====================================================================
+    public async Task<bool> RevokeViaDbFunctionAsync(
+        string tokenHash,
+        CancellationToken ct)
+    {
+        const string sql = @"SELECT invite_revoke(@hash);";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("hash", tokenHash);
+        await cmd.ExecuteNonQueryAsync(ct);
+
+        return true;
+    }
+
+    // =====================================================================
+    // Get Invites by Sender
+    // =====================================================================
+    public async Task<IEnumerable<Invite>> GetBySenderAsync(
+        Guid senderId,
+        CancellationToken ct)
+    {
+        var sql = $@"
+            SELECT *
+            FROM {Table}
+            WHERE sender_id = @sender
+            ORDER BY created_at DESC;
+        ";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+        cmd.Parameters.AddWithValue("sender", senderId);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        return await MapListAsync(r, ct);
+    }
+
+    // =====================================================================
+    // Get Invites by Email
+    // =====================================================================
+    public async Task<IEnumerable<Invite>> GetByEmailAsync(
+        string email,
+        CancellationToken ct)
+    {
+        var sql = $@"
+            SELECT *
+            FROM {Table}
+            WHERE LOWER(email) = LOWER(@em)
+            ORDER BY created_at DESC;
+        ";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+        cmd.Parameters.AddWithValue("em", email);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        return await MapListAsync(r, ct);
+    }
+
+    // =====================================================================
+    // Get Invite by Token Hash
+    // =====================================================================
+    public async Task<Invite?> GetByTokenHashAsync(
+        string tokenHash,
+        CancellationToken ct)
+    {
+        var sql = $@"
+            SELECT *
+            FROM {Table}
+            WHERE token_hash = @hash
+            LIMIT 1;
+        ";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("hash", tokenHash);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        return await r.ReadAsync(ct) ? Map(r) : null;
+    }
+
+    // =====================================================================
+    // Validation helpers
+    // =====================================================================
+    public async Task<bool> ValidateWorkspaceExistsAsync(
+        Guid workspaceId,
+        CancellationToken ct)
+    {
+        const string sql = @"SELECT 1 FROM workspaces WHERE id = @id";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("id", workspaceId);
+        return await cmd.ExecuteScalarAsync(ct) is not null;
+    }
+
+    public async Task<bool> ValidateBoardExistsAsync(
+        Guid boardId,
+        CancellationToken ct)
+    {
+        const string sql = @"SELECT 1 FROM boards WHERE id = @id";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("id", boardId);
+        return await cmd.ExecuteScalarAsync(ct) is not null;
+    }
+
+    // =====================================================================
+    // RAW CREATE/UPDATE (NOT SUPPORTED)
+    // =====================================================================
+    public override Task<Guid> CreateAsync(Invite e, CancellationToken ct)
+        => throw new NotSupportedException(
+            "Use CreateViaDbFunctionAsync for invite creation.");
+
+    public override Task<bool> UpdateAsync(Invite e, CancellationToken ct)
+        => throw new NotSupportedException(
+            "Use database helper functions for modifying invite state.");
 }

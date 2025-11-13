@@ -14,6 +14,7 @@ using StickyBoard.Api.Repositories.BoardsAndCards;
 using StickyBoard.Api.Repositories.Organizations;
 using StickyBoard.Api.Repositories.SocialAndMessaging;
 using StickyBoard.Api.Repositories.UsersAndAuth;
+using StickyBoard.Api.Services.UsersAndAuth;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -47,17 +48,31 @@ else
 }
 
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+
+// Users & Auth
 dataSourceBuilder.MapEnum<UserRole>("user_role");
-dataSourceBuilder.MapEnum<BoardRole>("board_role");
-dataSourceBuilder.MapEnum<OrgRole>("org_role");
-dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
-dataSourceBuilder.MapEnum<TabScope>("tab_scope");
-dataSourceBuilder.MapEnum<TabType>("tab_type");
-dataSourceBuilder.MapEnum<CardType>("card_type");
+
+// Workspaces
+dataSourceBuilder.MapEnum<WorkspaceRole>("workspace_role");
+
+// Views
+dataSourceBuilder.MapEnum<ViewType>("view_type");
+
+// Cards
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
-dataSourceBuilder.MapEnum<MessageType>("message_type");
-dataSourceBuilder.MapEnum<MessageStatus>("message_status");
-dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
+
+// Messaging / Channels
+dataSourceBuilder.MapEnum<MessageChannel>("message_channel");
+
+// Notifications
+dataSourceBuilder.MapEnum<NotificationType>("notification_type");
+
+// Invites
+dataSourceBuilder.MapEnum<InviteStatus>("invite_status");
+
+// Contacts
+dataSourceBuilder.MapEnum<ContactStatus>("contact_status");
+
 
 
 var dataSource = dataSourceBuilder.Build();

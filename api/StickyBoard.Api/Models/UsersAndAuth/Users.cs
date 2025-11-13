@@ -9,28 +9,31 @@ namespace StickyBoard.Api.Models.UsersAndAuth
     [Table("users")]
     public class User : IEntityUpdatable, ISoftDeletable
     {
-        [Key, Column("id")] 
+        [Key, Column("id")]
         public Guid Id { get; set; }
 
-        [Column("email")] 
+        [Column("email")]
         public string Email { get; set; } = string.Empty;
 
-        [Column("display_name")] 
+        [Column("display_name")]
         public string DisplayName { get; set; } = string.Empty;
 
-        [Column("avatar_uri")] 
+        [Column("avatar_uri")]
         public string? AvatarUri { get; set; }
 
-        [Column("prefs")] 
+        [Column("prefs")]
         public JsonDocument Prefs { get; set; } = JsonDocument.Parse("{}");
 
-        [Column("created_at")] 
+        [Column("groups")]
+        public string[] Groups { get; set; } = Array.Empty<string>();
+
+        [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
-        [Column("updated_at")] 
+        [Column("updated_at")]
         public DateTime UpdatedAt { get; set; }
 
-        [Column("deleted_at")] 
+        [Column("deleted_at")]
         public DateTime? DeletedAt { get; set; }
     }
 }

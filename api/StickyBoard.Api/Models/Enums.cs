@@ -22,9 +22,9 @@
     }
 
     // ============================
-    // Organizations
+    // Workspaces
     // ============================
-    public enum OrgRole
+    public enum WorkspaceRole
     {
         owner,
         admin,
@@ -34,55 +34,23 @@
     }
 
     // ============================
-    // Boards & Permissions
+    // Views
     // ============================
-    public enum BoardRole
+    public enum ViewType
     {
-        owner,
-        editor,
-        commenter,
-        viewer
-    }
-
-    public enum BoardVisibility
-    {
-        private_,
-        shared,
-        public_
-    }
-
-    // ============================
-    // Tabs
-    // ============================
-    public enum TabScope
-    {
-        board,
-        section
-    }
-
-    public enum TabType
-    {
-        board,
+        kanban,
+        list,
         calendar,
         timeline,
-        kanban,
-        whiteboard,
-        chat,
         metrics,
-        custom
+        doc,
+        whiteboard,
+        chat
     }
 
     // ============================
     // Cards
     // ============================
-    public enum CardType
-    {
-        note,
-        task,
-        event_,
-        drawing
-    }
-
     public enum CardStatus
     {
         open,
@@ -95,25 +63,47 @@
     // ============================
     // Messaging & Social
     // ============================
-    public enum MessageType
+
+    // SQL: message_channel
+    public enum MessageChannel
     {
-        invite,
-        system,
+        board,
+        view,
         direct,
-        org_invite
+        system
     }
 
-    public enum MessageStatus
+    // SQL: notification_type
+    public enum NotificationType
     {
-        unread,
-        read,
-        archived
+        mention,
+        reply,
+        assignment,
+        system
     }
 
-    public enum RelationStatus
+    // SQL: invite_status
+    public enum InviteStatus
     {
-        active_,
-        blocked,
-        inactive
+        pending,
+        accepted,
+        revoked,
+        expired
     }
+    // SQL: invite_scope
+    public enum InviteScope
+    {
+        Workspace,
+        Board,
+        Contact
+    }
+
+    // SQL: contact_status
+    public enum ContactStatus
+    {
+        pending,
+        accepted,
+        blocked
+    }
+
 }

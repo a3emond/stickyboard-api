@@ -7,11 +7,6 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace StickyBoard.Api.Auth
 {
-    public interface IJwtTokenService
-    {
-        string CreateToken(Guid userId, string email, string role);
-    }
-
     public sealed class JwtTokenService : IJwtTokenService
     {
         private readonly JwtOptions _opt;

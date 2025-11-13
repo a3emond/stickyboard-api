@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS user_contacts (
   user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   contact_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  status      text NOT NULL DEFAULT 'pending', -- pending | accepted | blocked
+  status      contact_status NOT NULL DEFAULT 'pending', -- pending | accepted | blocked
   created_at  timestamptz NOT NULL DEFAULT now(),
   accepted_at timestamptz,
   PRIMARY KEY (user_id, contact_id)

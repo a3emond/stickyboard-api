@@ -8,25 +8,25 @@ namespace StickyBoard.Api.Models.UsersAndAuth
     [Table("auth_users")]
     public class AuthUser : IEntityUpdatable, ISoftDeletable
     {
-        [Key, Column("user_id")] 
+        [Key, Column("user_id")]
         public Guid UserId { get; set; }
 
-        [Column("password_hash")] 
+        [Column("password_hash")]
         public string PasswordHash { get; set; } = string.Empty;
 
-        [Column("role")] 
+        [Column("role")]
         public UserRole Role { get; set; } = UserRole.user;
 
-        [Column("last_login")] 
-        public DateTime LastLogin { get; set; }
+        [Column("last_login")]
+        public DateTime? LastLogin { get; set; }
 
-        [Column("created_at")] 
+        [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
-        [Column("updated_at")] 
+        [Column("updated_at")]
         public DateTime UpdatedAt { get; set; }
-        
-        [Column("deleted_at")] 
+
+        [Column("deleted_at")]
         public DateTime? DeletedAt { get; set; }
     }
 }

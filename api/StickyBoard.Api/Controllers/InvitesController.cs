@@ -1,8 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs;
-using StickyBoard.Api.Services;
+using StickyBoard.Api.DTOs.Common;
+using StickyBoard.Api.DTOs.SocialAndMessaging;
+using StickyBoard.Api.Services.SocialAndMessaging;
 
 namespace StickyBoard.Api.Controllers;
 
@@ -19,85 +20,105 @@ public sealed class InvitesController : ControllerBase
     }
 
     // ------------------------------------------------------------
-    // CREATE
+    // CREATE INVITE
     // ------------------------------------------------------------
     [HttpPost]
-    public async Task<ActionResult<ApiResponseDto<InviteCreateResponseDto>>> Create([FromBody] InviteCreateDto dto, CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<InviteCreateResponseDto>>> Create(
+        [FromBody] InviteCreateRequestDto dto,
+        CancellationToken ct)
     {
         var senderId = User.GetUserId();
         if (senderId == Guid.Empty)
             return Unauthorized(ApiResponseDto<InviteCreateResponseDto>.Fail("Invalid or missing token."));
 
-        var result = await _invites.CreateAsync(senderId, dto, ct);
+        dto.SenderId = senderId;
+
+        var result = await _invites.CreateAsync(dto, ct);
         return Ok(ApiResponseDto<InviteCreateResponseDto>.Ok(result));
     }
 
     // ------------------------------------------------------------
-    // REDEEM
+    // ACCEPT INVITE
     // ------------------------------------------------------------
-    [HttpPost("redeem")]
-    public async Task<ActionResult<ApiResponseDto<object>>> Redeem([FromBody] InviteRedeemRequestDto dto, CancellationToken ct)
+    [HttpPost("accept")]
+    public async Task<ActionResult<ApiResponseDto<InviteAcceptResponseDto>>> Accept(
+        [FromBody] InviteAcceptRequestDto dto,
+        CancellationToken ct)
     {
         var userId = User.GetUserId();
         if (userId == Guid.Empty)
-            return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
+            return Unauthorized(ApiResponseDto<InviteAcceptResponseDto>.Fail("Invalid or missing token."));
 
-        await _invites.RedeemAsync(userId, dto.Token, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+        dto.AcceptingUserId = userId;
+
+        var result = await _invites.AcceptAsync(dto, ct);
+        return result is null
+            ? NotFound(ApiResponseDto<InviteAcceptResponseDto>.Fail("Invalid or expired invite."))
+            : Ok(ApiResponseDto<InviteAcceptResponseDto>.Ok(result));
     }
 
     // ------------------------------------------------------------
-    // RECEIVED INVITES
+    // REVOKE INVITE
     // ------------------------------------------------------------
-    [HttpGet("received")]
-    public async Task<ActionResult<ApiResponseDto<IEnumerable<InviteListItemDto>>>> GetReceived(CancellationToken ct)
+    [HttpPost("revoke")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Revoke(
+        [FromBody] InviteRevokeRequestDto dto,
+        CancellationToken ct)
     {
-        var userId = User.GetUserId();
-        if (userId == Guid.Empty)
-            return Unauthorized(ApiResponseDto<IEnumerable<InviteListItemDto>>.Fail("Invalid or missing token."));
+        var senderId = User.GetUserId();
+        if (senderId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
 
-        var list = await _invites.GetPendingForUserAsync(userId, ct);
-        return Ok(ApiResponseDto<IEnumerable<InviteListItemDto>>.Ok(list));
+        var ok = await _invites.RevokeAsync(dto.Token, ct);
+
+        return ok
+            ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+            : NotFound(ApiResponseDto<object>.Fail("Invite not found or already handled."));
     }
 
     // ------------------------------------------------------------
     // SENT INVITES
     // ------------------------------------------------------------
     [HttpGet("sent")]
-    public async Task<ActionResult<ApiResponseDto<IEnumerable<InviteListItemDto>>>> GetSent(CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<InviteDto>>>> GetSent(
+        CancellationToken ct)
     {
         var senderId = User.GetUserId();
         if (senderId == Guid.Empty)
-            return Unauthorized(ApiResponseDto<IEnumerable<InviteListItemDto>>.Fail("Invalid or missing token."));
+            return Unauthorized(ApiResponseDto<IEnumerable<InviteDto>>.Fail("Invalid or missing token."));
 
-        var list = await _invites.GetPendingSentAsync(senderId, ct);
-        return Ok(ApiResponseDto<IEnumerable<InviteListItemDto>>.Ok(list));
+        var invites = await _invites.GetBySenderAsync(senderId, ct);
+        return Ok(ApiResponseDto<IEnumerable<InviteDto>>.Ok(invites));
     }
 
     // ------------------------------------------------------------
-    // CANCEL
+    // LOOKUP BY EMAIL
     // ------------------------------------------------------------
-    [HttpDelete("{inviteId:guid}")]
-    public async Task<ActionResult<ApiResponseDto<object>>> Cancel(Guid inviteId, CancellationToken ct)
+    [HttpGet("email")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<InviteDto>>>> GetByEmail(
+        [FromQuery] string email,
+        CancellationToken ct)
     {
-        var senderId = User.GetUserId();
-        if (senderId == Guid.Empty)
-            return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
+        if (string.IsNullOrWhiteSpace(email))
+            return BadRequest(ApiResponseDto<IEnumerable<InviteDto>>.Fail("Email is required."));
 
-        await _invites.CancelAsync(senderId, inviteId, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+        var invites = await _invites.GetByEmailAsync(email, ct);
+        return Ok(ApiResponseDto<IEnumerable<InviteDto>>.Ok(invites));
     }
 
     // ------------------------------------------------------------
-    // PUBLIC LOOKUP
+    // PUBLIC LOOKUP (NO AUTH)
     // ------------------------------------------------------------
     [AllowAnonymous]
     [HttpGet("public/{token}")]
-    public async Task<ActionResult<ApiResponseDto<InvitePublicDto>>> GetPublic(string token, CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<InviteDto>>> GetPublic(
+        string token,
+        CancellationToken ct)
     {
-        var result = await _invites.GetPublicByTokenAsync(token, ct);
-        return result is null
-            ? NotFound(ApiResponseDto<InvitePublicDto>.Fail("Invite not found."))
-            : Ok(ApiResponseDto<InvitePublicDto>.Ok(result));
+        var invite = await _invites.GetByTokenAsync(token, ct);
+
+        return invite is null
+            ? NotFound(ApiResponseDto<InviteDto>.Fail("Invite not found."))
+            : Ok(ApiResponseDto<InviteDto>.Ok(invite));
     }
 }
