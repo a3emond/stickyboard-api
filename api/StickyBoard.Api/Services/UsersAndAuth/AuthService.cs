@@ -7,7 +7,9 @@ using StickyBoard.Api.Models.UsersAndAuth;
 using StickyBoard.Api.Repositories.UsersAndAuth;
 using StickyBoard.Api.Auth;
 using StickyBoard.Api.DTOs.Common;
+using StickyBoard.Api.DTOs.SocialAndMessaging;
 using StickyBoard.Api.Repositories.UsersAndAuth.Contracts;
+using StickyBoard.Api.Services.SocialAndMessaging.Contracts;
 using StickyBoard.Api.Services.UsersAndAuth.Contracts;
 
 namespace StickyBoard.Api.Services.UsersAndAuth;
@@ -55,26 +57,47 @@ public sealed class AuthService : IAuthService
 
         var user = new User
         {
-            Email = dto.Email.Trim(),
+            Email       = dto.Email.Trim(),
             DisplayName = dto.DisplayName.Trim(),
-            Prefs = "{}".ToJsonDocument(),
-            Groups = Array.Empty<string>()
+            Prefs       = "{}".ToJsonDocument(),
+            Groups      = Array.Empty<string>()
         };
 
         var userId = await _users.CreateAsync(user, ct);
 
         var au = new AuthUser
         {
-            UserId = userId,
+            UserId      = userId,
             PasswordHash = _hasher.Hash(dto.Password),
-            Role = UserRole.user,
-            LastLogin = DateTime.UtcNow
+            Role        = UserRole.user,
+            LastLogin   = DateTime.UtcNow
         };
         await _auth.CreateAsync(au, ct);
 
+        // ============================================================
+        // INVITE ACCEPT LOGIC (correct structure)
+        // ============================================================
         if (dto is IInviteAware invite && !string.IsNullOrWhiteSpace(invite.InviteToken))
-            await _invites.RedeemAsync(userId, invite.InviteToken!, ct);
+        {
+            var acceptRequest = new InviteAcceptRequestDto
+            {
+                Token          = invite.InviteToken!,
+                AcceptingUserId = userId
+            };
 
+            var acceptResult = await _invites.AcceptAsync(acceptRequest, ct);
+
+            // acceptResult may be null if expired or invalid
+            if (acceptResult == null)
+                throw new ValidationException("Invalid or expired invite token.");
+
+            // If this was a contact invite, the DB function has already inserted reciprocal contacts.
+            // If it was a workspace or board invite, membership is already created.
+        }
+
+        // ============================================================
+        // ISSUE TOKENS
+        // ============================================================
         var (access, refresh) = await IssueTokensAsync(userId, dto.Email, au.Role, ct);
 
         var created = await _users.GetByIdAsync(userId, ct)
@@ -82,11 +105,12 @@ public sealed class AuthService : IAuthService
 
         return new AuthResultDto
         {
-            AccessToken = access,
+            AccessToken  = access,
             RefreshToken = refresh,
             User = ToSelfDto(created, au)
         };
     }
+
 
     // ============================================================
     // LOGIN

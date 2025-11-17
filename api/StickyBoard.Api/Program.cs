@@ -7,11 +7,9 @@ using Microsoft.OpenApi.Models;
 using Npgsql;
 using StickyBoard.Api.Auth;
 using StickyBoard.Api.Common.Filters;
+using StickyBoard.Api.Common.Notifications;
 using StickyBoard.Api.Middleware;
 using StickyBoard.Api.Models;
-using StickyBoard.Api.Services;
-using StickyBoard.Api.Repositories.BoardsAndCards;
-using StickyBoard.Api.Repositories.Organizations;
 using StickyBoard.Api.Repositories.SocialAndMessaging;
 using StickyBoard.Api.Repositories.UsersAndAuth;
 using StickyBoard.Api.Services.UsersAndAuth;
@@ -82,6 +80,7 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
+builder.Services.AddSingleton<INotificationBus, NoOpNotificationBus>(); // TODO: Replace with real implementation
 
 // ----------------------------------------------------------
 // Core Auth / Users
@@ -95,53 +94,21 @@ builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 // ----------------------------------------------------------
-// Boards / Folders / Permissions / Tabs / Sections / Cards
+// Boards / Cards
 // ----------------------------------------------------------
-builder.Services.AddScoped<BoardRepository>();
-builder.Services.AddScoped<BoardService>();
 
-builder.Services.AddScoped<BoardFolderRepository>();
-builder.Services.AddScoped<BoardFolderService>();
-
-builder.Services.AddScoped<PermissionRepository>();
-builder.Services.AddScoped<PermissionService>();
-
-builder.Services.AddScoped<TabRepository>();
-builder.Services.AddScoped<TabService>();
-
-builder.Services.AddScoped<SectionRepository>();
-builder.Services.AddScoped<SectionService>();
-
-builder.Services.AddScoped<CardRepository>();
-builder.Services.AddScoped<CardService>();
 
 // ----------------------------------------------------------
 // Card Comments & Board Chat Messages
 // ----------------------------------------------------------
-builder.Services.AddScoped<CardCommentRepository>();
-builder.Services.AddScoped<CardCommentService>();
 
-builder.Services.AddScoped<BoardMessageRepository>();
-builder.Services.AddScoped<BoardMessageService>();
-
-// ----------------------------------------------------------
-// Organizations
-// ----------------------------------------------------------
-builder.Services.AddScoped<OrganizationRepository>();
-builder.Services.AddScoped<OrganizationMemberRepository>();
-builder.Services.AddScoped<OrganizationService>();
 
 // ----------------------------------------------------------
 // Messaging / Invites / User Relations
 // ----------------------------------------------------------
-builder.Services.AddScoped<MessageRepository>();
-builder.Services.AddScoped<MessageService>();
 
 builder.Services.AddScoped<InviteRepository>();
-builder.Services.AddScoped<InviteService>();
 
-builder.Services.AddScoped<UserRelationRepository>();
-builder.Services.AddScoped<UserRelationService>();
 
 // ==========================================================
 // 3. AUTHENTICATION & AUTHORIZATION (JWT + API KEY)

@@ -4,7 +4,7 @@ using StickyBoard.Api.Repositories.Base;
 
 namespace StickyBoard.Api.Repositories.SocialAndMessaging.Contracts;
 
-public interface IUserContactRepository : IRepository<UserContact>, ISyncRepository<UserContact>
+public interface IContactRepository : IRepository<UserContact>, ISyncRepository<UserContact>
 {
     // update status of contact
     Task UpdateContactStatusAsync(Guid userId, Guid contactId, ContactStatus status, CancellationToken ct);

@@ -8,7 +8,8 @@
         AUTH_EXPIRED,
         NOT_FOUND,
         FORBIDDEN,
-        VALIDATION_ERROR
+        VALIDATION_ERROR,
+        CONFLICT,
     }
     
     // ============================

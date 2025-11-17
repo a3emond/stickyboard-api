@@ -8,9 +8,9 @@ using StickyBoard.Api.Repositories.SocialAndMessaging.Contracts;
 
 namespace StickyBoard.Api.Repositories.SocialAndMessaging;
 
-public class UserContactRepository : RepositoryBase<UserContact>, IUserContactRepository
+public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
 {
-    public UserContactRepository(NpgsqlDataSource db) : base(db) { }
+    public ContactRepository(NpgsqlDataSource db) : base(db) { }
 
     protected override UserContact Map(NpgsqlDataReader r)
         => MappingHelper.MapEntity<UserContact>(r);
