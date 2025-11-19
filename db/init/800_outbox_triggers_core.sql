@@ -372,3 +372,5 @@ DROP TRIGGER IF EXISTS trg_invites_outbox ON invites;
 CREATE TRIGGER trg_invites_outbox
 AFTER INSERT OR UPDATE OR DELETE ON invites
 FOR EACH ROW EXECUTE FUNCTION emit_invite_outbox();
+
+

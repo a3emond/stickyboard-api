@@ -12,15 +12,15 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
 {
     public InviteRepository(NpgsqlDataSource db) : base(db) { }
 
-    // =====================================================================
+    // ---------------------------------------------------------------------
     // Mapping
-    // =====================================================================
-    protected override Invite Map(NpgsqlDataReader r)
+    // ---------------------------------------------------------------------
+    protected override Invite MapRow(NpgsqlDataReader r)
         => MappingHelper.MapEntity<Invite>(r);
 
-    // =====================================================================
+    // ---------------------------------------------------------------------
     // CREATE via DB helper (invite_create)
-    // =====================================================================
+    // ---------------------------------------------------------------------
     public async Task<Guid> CreateViaDbFunctionAsync(
         Guid senderId,
         string email,
@@ -66,13 +66,12 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         cmd.Parameters.AddWithValue("expires_in", expiresIn);
         cmd.Parameters.AddWithValue("note", (object?)note ?? DBNull.Value);
 
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return (Guid)result!;
+        return (Guid)(await cmd.ExecuteScalarAsync(ct))!;
     }
 
-    // =====================================================================
+    // ---------------------------------------------------------------------
     // ACCEPT via DB helper (invite_accept)
-    // =====================================================================
+    // ---------------------------------------------------------------------
     public async Task<InviteAcceptResponseDto?> AcceptViaDbFunctionAsync(
         string tokenHash,
         Guid acceptingUserId,
@@ -100,15 +99,23 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         if (!await r.ReadAsync(ct))
             return null;
 
-        return new InviteAcceptResponseDto();
+        return new InviteAcceptResponseDto
+        {
+            InviteId    = r.GetGuid(0),
+            Scope       = Enum.Parse<InviteScope>(r.GetString(1)),
+            WorkspaceId = r.IsDBNull(2) ? null : r.GetGuid(2),
+            BoardId     = r.IsDBNull(3) ? null : r.GetGuid(3),
+            ContactId   = r.IsDBNull(4) ? null : r.GetGuid(4),
+            TargetRole  = r.IsDBNull(5) ? null : Enum.Parse<WorkspaceRole>(r.GetString(5)),
+            BoardRole   = r.IsDBNull(6) ? null : Enum.Parse<WorkspaceRole>(r.GetString(6))
+        };
+
     }
 
-    // =====================================================================
-    // REVOKE via DB helper
-    // =====================================================================
-    public async Task<bool> RevokeViaDbFunctionAsync(
-        string tokenHash,
-        CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // REVOKE via DB function
+    // ---------------------------------------------------------------------
+    public async Task<bool> RevokeViaDbFunctionAsync(string tokenHash, CancellationToken ct)
     {
         const string sql = @"SELECT invite_revoke(@hash);";
 
@@ -116,17 +123,15 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         await using var cmd = new NpgsqlCommand(sql, c);
 
         cmd.Parameters.AddWithValue("hash", tokenHash);
-        await cmd.ExecuteNonQueryAsync(ct);
 
+        await cmd.ExecuteNonQueryAsync(ct);
         return true;
     }
 
-    // =====================================================================
+    // ---------------------------------------------------------------------
     // Get Invites by Sender
-    // =====================================================================
-    public async Task<IEnumerable<Invite>> GetBySenderAsync(
-        Guid senderId,
-        CancellationToken ct)
+    // ---------------------------------------------------------------------
+    public async Task<IEnumerable<Invite>> GetBySenderAsync(Guid senderId, CancellationToken ct)
     {
         var sql = $@"
             SELECT *
@@ -137,18 +142,17 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("sender", senderId);
 
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await MapListAsync(r, ct);
     }
 
-    // =====================================================================
-    // Get Invites by Email
-    // =====================================================================
-    public async Task<IEnumerable<Invite>> GetByEmailAsync(
-        string email,
-        CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // Get by Email
+    // ---------------------------------------------------------------------
+    public async Task<IEnumerable<Invite>> GetByEmailAsync(string email, CancellationToken ct)
     {
         var sql = $@"
             SELECT *
@@ -159,18 +163,17 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("em", email);
 
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await MapListAsync(r, ct);
     }
 
-    // =====================================================================
-    // Get Invite by Token Hash
-    // =====================================================================
-    public async Task<Invite?> GetByTokenHashAsync(
-        string tokenHash,
-        CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // Get by token_hash
+    // ---------------------------------------------------------------------
+    public async Task<Invite?> GetByTokenHashAsync(string tokenHash, CancellationToken ct)
     {
         var sql = $@"
             SELECT *
@@ -185,17 +188,15 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         cmd.Parameters.AddWithValue("hash", tokenHash);
 
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        return await r.ReadAsync(ct) ? Map(r) : null;
+        return await r.ReadAsync(ct) ? MapRow(r) : null;
     }
 
-    // =====================================================================
+    // ---------------------------------------------------------------------
     // Validation helpers
-    // =====================================================================
-    public async Task<bool> ValidateWorkspaceExistsAsync(
-        Guid workspaceId,
-        CancellationToken ct)
+    // ---------------------------------------------------------------------
+    public async Task<bool> ValidateWorkspaceExistsAsync(Guid workspaceId, CancellationToken ct)
     {
-        const string sql = @"SELECT 1 FROM workspaces WHERE id = @id";
+        const string sql = @"SELECT 1 FROM workspaces WHERE id = @id;";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
@@ -204,11 +205,9 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         return await cmd.ExecuteScalarAsync(ct) is not null;
     }
 
-    public async Task<bool> ValidateBoardExistsAsync(
-        Guid boardId,
-        CancellationToken ct)
+    public async Task<bool> ValidateBoardExistsAsync(Guid boardId, CancellationToken ct)
     {
-        const string sql = @"SELECT 1 FROM boards WHERE id = @id";
+        const string sql = @"SELECT 1 FROM boards WHERE id = @id;";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
@@ -217,14 +216,12 @@ public sealed class InviteRepository : RepositoryBase<Invite>, IInviteRepository
         return await cmd.ExecuteScalarAsync(ct) is not null;
     }
 
-    // =====================================================================
-    // RAW CREATE/UPDATE (NOT SUPPORTED)
-    // =====================================================================
+    // ---------------------------------------------------------------------
+    // RAW CREATE/UPDATE BLOCKED
+    // ---------------------------------------------------------------------
     public override Task<Guid> CreateAsync(Invite e, CancellationToken ct)
-        => throw new NotSupportedException(
-            "Use CreateViaDbFunctionAsync for invite creation.");
+        => throw new NotSupportedException("Use CreateViaDbFunctionAsync for invite creation.");
 
     public override Task<bool> UpdateAsync(Invite e, CancellationToken ct)
-        => throw new NotSupportedException(
-            "Use database helper functions for modifying invite state.");
+        => throw new NotSupportedException("Invite updates are handled by DB functions.");
 }

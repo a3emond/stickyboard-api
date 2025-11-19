@@ -19,3 +19,5 @@ CREATE TABLE IF NOT EXISTS worker_job_attempts (
   finished_at timestamptz,
   error       text
 );
+
+

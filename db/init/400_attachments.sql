@@ -42,3 +42,11 @@ CREATE TRIGGER trg_attach_version
   BEFORE UPDATE ON attachments
   FOR EACH ROW EXECUTE FUNCTION bump_version();
 
+
+-- Add a CHECK constraint for READY
+ALTER TABLE attachments
+ADD CONSTRAINT attachments_ready_requires_storage_path
+CHECK (
+  status <> 'ready'
+  OR (storage_path IS NOT NULL AND length(storage_path) > 0)
+);

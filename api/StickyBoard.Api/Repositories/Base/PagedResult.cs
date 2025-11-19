@@ -9,4 +9,8 @@ public sealed class PagedResult<T>
 
     public static PagedResult<T> Create(IEnumerable<T> items, int total, int limit, int offset)
         => new() { Items = items, Total = total, Limit = limit, Offset = offset };
+    
+    public static PagedResult<T> Empty(int limit, int offset)
+        => new() { Items = Enumerable.Empty<T>(), Total = 0, Limit = limit, Offset = offset };
+
 }

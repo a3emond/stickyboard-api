@@ -7,7 +7,6 @@ using Microsoft.OpenApi.Models;
 using Npgsql;
 using StickyBoard.Api.Auth;
 using StickyBoard.Api.Common.Filters;
-using StickyBoard.Api.Common.Notifications;
 using StickyBoard.Api.Middleware;
 using StickyBoard.Api.Models;
 using StickyBoard.Api.Repositories.SocialAndMessaging;
@@ -80,8 +79,6 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
-builder.Services.AddSingleton<INotificationBus, NoOpNotificationBus>(); // TODO: Replace with real implementation
-
 // ----------------------------------------------------------
 // Core Auth / Users
 // ----------------------------------------------------------

@@ -3,46 +3,26 @@ using StickyBoard.Api.Common;
 using StickyBoard.Api.Models.UsersAndAuth;
 using StickyBoard.Api.Repositories.Base;
 using StickyBoard.Api.Repositories.UsersAndAuth.Contracts;
+using NpgsqlTypes;
 
 namespace StickyBoard.Api.Repositories.UsersAndAuth;
-
-/*
-    Inherits RepositoryBase<T>:
-
-    Provides:
-    - Table name resolution via [Table] or type name.
-    - Connection helpers (NpgsqlDataSource).
-    - Soft-delete filtering when T : ISoftDeletable.
-    - Standard reads:
-        GetByIdAsync, GetAllAsync, ExistsAsync, CountAsync.
-    - Paging:
-        GetPagedAsync(limit, offset) ordered by updated_at.
-    - Sync support:
-        GetUpdatedSinceAsync and paged variant.
-    - DeleteAsync:
-        Soft delete if supported, otherwise hard delete.
-
-    Child class must implement:
-        Map(), CreateAsync(), UpdateAsync().
-*/
-
 
 public sealed class RefreshTokenRepository 
     : RepositoryBase<RefreshToken>, IRefreshTokenRepository
 {
     public RefreshTokenRepository(NpgsqlDataSource db) : base(db) { }
 
-    protected override RefreshToken Map(NpgsqlDataReader r)
+    protected override RefreshToken MapRow(NpgsqlDataReader r)
         => MappingHelper.MapEntity<RefreshToken>(r);
 
-    // ============================================================
+    // ---------------------------------------------------------------------
     // CREATE
-    // ============================================================
+    // ---------------------------------------------------------------------
     public override async Task<Guid> CreateAsync(RefreshToken e, CancellationToken ct)
     {
         const string sql = @"
             INSERT INTO refresh_tokens (
-                token_hash, user_id, client_id, user_agent, ip_addr, 
+                token_hash, user_id, client_id, user_agent, ip_addr,
                 expires_at, revoked, issued_at
             )
             VALUES (@hash, @uid, @client, @agent, @ip, @exp, FALSE, NOW());
@@ -59,24 +39,26 @@ public sealed class RefreshTokenRepository
         cmd.Parameters.AddWithValue("exp", e.ExpiresAt);
 
         await cmd.ExecuteNonQueryAsync(ct);
-        return Guid.Empty; // token_hash is PK
+
+        // PK is token_hash → always Guid.Empty
+        return Guid.Empty;
     }
 
-    // ============================================================
+    // ---------------------------------------------------------------------
     // UPDATE
-    // ============================================================
+    // ---------------------------------------------------------------------
     public override async Task<bool> UpdateAsync(RefreshToken e, CancellationToken ct)
     {
         const string sql = @"
             UPDATE refresh_tokens
-               SET revoked = @rev,
-                   revoked_at = CASE 
-                        WHEN @rev = TRUE AND revoked = FALSE THEN NOW() 
-                        ELSE revoked_at 
-                   END,
-                   replaced_by = @replaced,
-                   updated_at = NOW()
-             WHERE token_hash = @hash;
+            SET revoked     = @rev,
+                revoked_at  = CASE 
+                                 WHEN @rev = TRUE AND revoked = FALSE 
+                                 THEN NOW() 
+                                 ELSE revoked_at 
+                              END,
+                replaced_by = @replaced
+            WHERE token_hash = @hash;
         ";
 
         await using var c = await Conn(ct);
@@ -89,10 +71,10 @@ public sealed class RefreshTokenRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-    // ============================================================
-    // DELETE (hard — security cleanup)
-    // ============================================================
-    public override async Task<bool> DeleteAsync(Guid userId, CancellationToken ct)
+    // ---------------------------------------------------------------------
+    // DELETE OVERRIDE (security: hard delete)
+    // ---------------------------------------------------------------------
+    public async Task<bool> DeleteByUserIdAsync(Guid userId, CancellationToken ct)
     {
         const string sql = "DELETE FROM refresh_tokens WHERE user_id = @uid;";
 
@@ -103,17 +85,18 @@ public sealed class RefreshTokenRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-    // ============================================================
-    // GET BY HASH (valid token)
-    // ============================================================
+    // ---------------------------------------------------------------------
+    // GET BY HASH
+    // ---------------------------------------------------------------------
     public async Task<RefreshToken?> GetByHashAsync(string hash, CancellationToken ct)
     {
         const string sql = @"
-            SELECT * FROM refresh_tokens
-             WHERE token_hash = @hash
-               AND revoked = FALSE
-               AND expires_at > NOW()
-             LIMIT 1;
+            SELECT *
+            FROM refresh_tokens
+            WHERE token_hash = @hash
+              AND revoked = FALSE
+              AND expires_at > NOW()
+            LIMIT 1;
         ";
 
         await using var c = await Conn(ct);
@@ -121,20 +104,19 @@ public sealed class RefreshTokenRepository
         cmd.Parameters.AddWithValue("hash", hash);
 
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        return await r.ReadAsync(ct) ? Map(r) : null;
+        return await r.ReadAsync(ct) ? MapRow(r) : null;
     }
 
-    // ============================================================
+    // ---------------------------------------------------------------------
     // REVOKE SINGLE TOKEN
-    // ============================================================
+    // ---------------------------------------------------------------------
     public async Task<bool> RevokeTokenAsync(string hash, CancellationToken ct)
     {
         const string sql = @"
             UPDATE refresh_tokens
-               SET revoked = TRUE,
-                   revoked_at = NOW(),
-                   updated_at = NOW()
-             WHERE token_hash = @hash;
+            SET revoked    = TRUE,
+                revoked_at = NOW()
+            WHERE token_hash = @hash;
         ";
 
         await using var c = await Conn(ct);
@@ -144,17 +126,16 @@ public sealed class RefreshTokenRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-    // ============================================================
+    // ---------------------------------------------------------------------
     // REVOKE ALL TOKENS FOR USER
-    // ============================================================
+    // ---------------------------------------------------------------------
     public async Task<bool> RevokeAllAsync(Guid userId, CancellationToken ct)
     {
         const string sql = @"
             UPDATE refresh_tokens
-               SET revoked = TRUE,
-                   revoked_at = NOW(),
-                   updated_at = NOW()
-             WHERE user_id = @uid;
+            SET revoked    = TRUE,
+                revoked_at = NOW()
+            WHERE user_id = @uid;
         ";
 
         await using var c = await Conn(ct);
@@ -164,15 +145,16 @@ public sealed class RefreshTokenRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-    // ============================================================
-    // GET BY USER (for future security dashboard)
-    // ============================================================
+    // ---------------------------------------------------------------------
+    // GET ALL FOR USER
+    // ---------------------------------------------------------------------
     public async Task<IEnumerable<RefreshToken>> GetByUserIdAsync(Guid userId, CancellationToken ct)
     {
         const string sql = @"
-            SELECT * FROM refresh_tokens
-             WHERE user_id = @uid
-             ORDER BY issued_at DESC;
+            SELECT *
+            FROM refresh_tokens
+            WHERE user_id = @uid
+            ORDER BY issued_at DESC;
         ";
 
         await using var c = await Conn(ct);
@@ -180,22 +162,24 @@ public sealed class RefreshTokenRepository
         cmd.Parameters.AddWithValue("uid", userId);
 
         await using var r = await cmd.ExecuteReaderAsync(ct);
-        var list = new List<RefreshToken>();
 
+        var list = new List<RefreshToken>();
         while (await r.ReadAsync(ct))
-            list.Add(Map(r));
+            list.Add(MapRow(r));
 
         return list;
     }
 
-    // ============================================================
-    // CLEANUP REVOKED (for maintenance jobs)
-    // ============================================================
+    // ---------------------------------------------------------------------
+    // CLEANUP REVOKED
+    // ---------------------------------------------------------------------
     public async Task<int> CleanupRevokedAsync(CancellationToken ct)
     {
         const string sql = "DELETE FROM refresh_tokens WHERE revoked = TRUE;";
+
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         return await cmd.ExecuteNonQueryAsync(ct);
     }
 }

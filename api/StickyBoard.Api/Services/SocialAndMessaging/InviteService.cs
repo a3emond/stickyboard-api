@@ -1,11 +1,9 @@
 ﻿using System.Security.Cryptography;
-using System.Text;
 using StickyBoard.Api.DTOs.SocialAndMessaging;
 using StickyBoard.Api.Models.SocialAndMessaging;
 using StickyBoard.Api.Repositories.SocialAndMessaging.Contracts;
 using StickyBoard.Api.Services.SocialAndMessaging.Contracts;
 using StickyBoard.Api.Auth;
-using StickyBoard.Api.Common;
 
 namespace StickyBoard.Api.Services.SocialAndMessaging;
 
@@ -20,19 +18,16 @@ public sealed class InviteService : IInviteService
         _hasher = hasher;
     }
 
-    // ------------------------------------------------------------
-    // Token generator (same entropy as refresh tokens)
-    // ------------------------------------------------------------
     private static string GenerateRawToken()
     {
-        Span<byte> bytes = stackalloc byte[32]; // 256-bit random
+        Span<byte> bytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
-    // ------------------------------------------------------------
-    // CREATE
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // CREATE  (no URL generation here!)
+    // ---------------------------------------------------------------------
     public async Task<InviteCreateResponseDto> CreateAsync(
         InviteCreateRequestDto dto,
         CancellationToken ct)
@@ -40,7 +35,7 @@ public sealed class InviteService : IInviteService
         var rawToken = GenerateRawToken();
         var tokenHash = _hasher.HashToken(rawToken);
 
-        var id = await _repo.CreateViaDbFunctionAsync(
+        var inviteId = await _repo.CreateViaDbFunctionAsync(
             dto.SenderId,
             dto.Email,
             dto.Scope,
@@ -55,51 +50,24 @@ public sealed class InviteService : IInviteService
             ct
         );
 
-        // Build public URL (canonical)
-        // This is the primary invite entrypoint used in emails and cross-platform links.
-        // The web app at /invite handles:
-        //   - token verification
-        //   - login/signup if needed
-        //   - invite acceptance
-        //   - optional redirect to platform downloads (iOS/Android/Desktop)
-        string inviteUrl = InviteUrlBuilder.BuildInviteUrl(rawToken);
+        // Worker will receive:
+        // - invite.created outbox entry
+        // - inviteId
+        // - tokenHash (from DB)
+        // And will regenerate:
+        // - final public invite URL
+        // - email / firebase notification payloads
 
-        /*
-            Other URL variants available if needed:
-
-            1) Deep Link (handled directly by mobile apps)
-               Opens the StickyBoard app immediately if installed.
-               Example: stickyboard://invite?token=...
-
-                 var deepLink = InviteUrlBuilder.BuildDeepLink(rawToken);
-
-            2) Mobile Landing Page
-               Optional page when you want a nicer experience on mobile:
-               - detects platform
-               - redirects to AppStore / PlayStore if app not installed
-
-                 var mobileUrl = InviteUrlBuilder.BuildMobileLandingPageUrl(rawToken);
-
-            3) Future custom endpoints (examples)
-               - Download stickyboard.aedev.pro/download?inviteToken=...
-               - Desktop installer page
-               - Invitation preview screen
-
-            NOTE:
-            Only RAW token is ever exposed to the client.
-            Database stores TokenHash = SHA256(rawToken).
-        */
-        
         return new InviteCreateResponseDto
         {
-            InviteId = id,
-            InviteUrl = inviteUrl
+            InviteId = inviteId,
+            InviteToken = rawToken  // returned as "token" for the worker/email
         };
     }
 
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
     // ACCEPT
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
     public async Task<InviteAcceptResponseDto?> AcceptAsync(
         InviteAcceptRequestDto dto,
         CancellationToken ct)
@@ -107,7 +75,8 @@ public sealed class InviteService : IInviteService
         var hash = _hasher.HashToken(dto.Token);
 
         var result = await _repo.AcceptViaDbFunctionAsync(hash, dto.AcceptingUserId, ct);
-        if (result == null) return null;
+        if (result == null)
+            return null;
 
         return new InviteAcceptResponseDto
         {
@@ -121,18 +90,18 @@ public sealed class InviteService : IInviteService
         };
     }
 
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
     // REVOKE
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
     public async Task<bool> RevokeAsync(string token, CancellationToken ct)
     {
         var hash = _hasher.HashToken(token);
         return await _repo.RevokeViaDbFunctionAsync(hash, ct);
     }
 
-    // ------------------------------------------------------------
-    // LISTING & LOOKUPS
-    // ------------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // LOOKUPS
+    // ---------------------------------------------------------------------
     public async Task<IEnumerable<InviteDto>> GetBySenderAsync(Guid senderId, CancellationToken ct)
     {
         var items = await _repo.GetBySenderAsync(senderId, ct);
@@ -152,9 +121,6 @@ public sealed class InviteService : IInviteService
         return invite == null ? null : MapToDto(invite);
     }
 
-    // ------------------------------------------------------------
-    // Mapping
-    // ------------------------------------------------------------
     private static InviteDto MapToDto(Invite e)
     {
         return new InviteDto
@@ -163,22 +129,17 @@ public sealed class InviteService : IInviteService
             SenderId = e.SenderId,
             Email = e.Email,
             ScopeType = e.ScopeType,
-
             WorkspaceId = e.WorkspaceId,
             BoardId = e.BoardId,
             ContactId = e.ContactId,
-
             TargetRole = e.TargetRole,
             BoardRole = e.BoardRole,
-
             Status = e.Status,
             CreatedAt = e.CreatedAt,
             ExpiresAt = e.ExpiresAt,
-
             AcceptedBy = e.AcceptedBy,
             AcceptedAt = e.AcceptedAt,
             RevokedAt = e.RevokedAt,
-
             Note = e.Note
         };
     }

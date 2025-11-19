@@ -8,23 +8,23 @@ using StickyBoard.Api.Repositories.SocialAndMessaging.Contracts;
 
 namespace StickyBoard.Api.Repositories.SocialAndMessaging;
 
-public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
+public sealed class ContactRepository 
+    : RepositoryBase<UserContact>, IContactRepository
 {
     public ContactRepository(NpgsqlDataSource db) : base(db) { }
 
-    protected override UserContact Map(NpgsqlDataReader r)
+    protected override UserContact MapRow(NpgsqlDataReader r)
         => MappingHelper.MapEntity<UserContact>(r);
 
-
-    // ---------------------------------------------------------
-    // Creation disabled: use invite system only
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // CREATE BLOCKED (must use invite system)
+    // ---------------------------------------------------------------------
     public override Task<Guid> CreateAsync(UserContact entity, CancellationToken ct)
-        => throw new ForbiddenException("Direct creation of contacts is forbidden. Use invite process.");
+        => throw new ForbiddenException("Direct creation of contacts is forbidden. Use the invite workflow.");
 
-    // ---------------------------------------------------------
-    // Update is only allowed for the status (pending → accepted, accepted → blocked, etc.)
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // UPDATE: only allowed status change (pending → accepted → blocked)
+    // ---------------------------------------------------------------------
     public override async Task<bool> UpdateAsync(UserContact entity, CancellationToken ct)
     {
         const string sql = @"
@@ -34,11 +34,13 @@ public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
                        WHEN @status = 'accepted' AND accepted_at IS NULL THEN NOW()
                        ELSE accepted_at
                    END
-             WHERE user_id = @u 
-               AND contact_id = @c";
+             WHERE user_id = @u
+               AND contact_id = @c;
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("status", entity.Status.ToString());
         cmd.Parameters.AddWithValue("u", entity.UserId);
         cmd.Parameters.AddWithValue("c", entity.ContactId);
@@ -46,38 +48,43 @@ public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-
-    // ---------------------------------------------------------
-    // Exists(user, contact)
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // EXISTS(user, contact)
+    // ---------------------------------------------------------------------
     public async Task<bool> ContactExistsAsync(Guid userId, Guid contactId, CancellationToken ct)
     {
-        const string sql = @"SELECT 1 
-                               FROM user_contacts 
-                              WHERE user_id = @u AND contact_id = @c";
+        const string sql = @"
+            SELECT 1
+              FROM user_contacts
+             WHERE user_id = @u AND contact_id = @c;
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("u", userId);
         cmd.Parameters.AddWithValue("c", contactId);
 
         return await cmd.ExecuteScalarAsync(ct) is not null;
     }
 
-
-    // ---------------------------------------------------------
-    // List of contacts by (user, status)
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // GET LIST BY STATUS
+    // ---------------------------------------------------------------------
     public async Task<List<UserContact>> GetContactsByUserIdAndStatusAsync(
         Guid userId, ContactStatus status, CancellationToken ct)
     {
         const string sql = @"
-            SELECT * FROM user_contacts
-             WHERE user_id = @u AND status = @status
-             ORDER BY updated_at DESC";
+            SELECT *
+              FROM user_contacts
+             WHERE user_id = @u
+               AND status = @status
+             ORDER BY updated_at DESC;
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("u", userId);
         cmd.Parameters.AddWithValue("status", status.ToString());
 
@@ -85,10 +92,9 @@ public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
         return await MapListAsync(r, ct);
     }
 
-
-    // ---------------------------------------------------------
-    // Update contact status only (light version of UpdateAsync)
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // UPDATE STATUS DIRECTLY
+    // ---------------------------------------------------------------------
     public async Task UpdateContactStatusAsync(Guid userId, Guid contactId, ContactStatus status, CancellationToken ct)
     {
         const string sql = @"
@@ -98,10 +104,12 @@ public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
                        WHEN @status = 'accepted' AND accepted_at IS NULL THEN NOW()
                        ELSE accepted_at
                    END
-             WHERE user_id = @u AND contact_id = @c";
+             WHERE user_id = @u AND contact_id = @c;
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("status", status.ToString());
         cmd.Parameters.AddWithValue("u", userId);
         cmd.Parameters.AddWithValue("c", contactId);
@@ -110,28 +118,29 @@ public class ContactRepository : RepositoryBase<UserContact>, IContactRepository
             throw new NotFoundException("Contact relation not found.");
     }
 
-
-    // ---------------------------------------------------------
-    // Reciprocal Delete (the ONLY valid delete)
-    // ---------------------------------------------------------
+    // ---------------------------------------------------------------------
+    // RECIPROCAL DELETE (the ONLY valid delete)
+    // ---------------------------------------------------------------------
     public async Task<bool> DeleteReciprocatedContactAsync(Guid userId, Guid contactId, CancellationToken ct)
     {
         const string sql = @"
             DELETE FROM user_contacts
              WHERE (user_id = @u AND contact_id = @c)
-                OR (user_id = @c AND contact_id = @u)";
+                OR (user_id = @c AND contact_id = @u);
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
+
         cmd.Parameters.AddWithValue("u", userId);
         cmd.Parameters.AddWithValue("c", contactId);
 
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }
 
-    // ---------------------------------------------------------
-    // Hard-delete disabled in RepositoryBase to force reciprocal delete only
-    // ---------------------------------------------------------
-    public override Task<bool> DeleteAsync(Guid id, CancellationToken ct)
-        => throw new ForbiddenException("Direct deletion of UserContact is forbidden. Use DeleteReciprocatedContactAsync.");
+    // ---------------------------------------------------------------------
+    // BLOCK BASE DELETE (force reciprocal only)
+    // ---------------------------------------------------------------------
+    public Task<bool> DeleteAsync(Guid id, CancellationToken ct)
+        => throw new ForbiddenException("Direct deletion is forbidden. Use DeleteReciprocatedContactAsync().");
 }

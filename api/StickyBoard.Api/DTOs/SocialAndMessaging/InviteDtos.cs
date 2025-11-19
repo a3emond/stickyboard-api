@@ -23,7 +23,7 @@ public sealed class InviteCreateRequestDto
 public sealed class InviteCreateResponseDto
 {
     public Guid InviteId { get; set; }
-    public string InviteUrl { get; set; } = string.Empty;
+    public string InviteToken { get; set; } = string.Empty;
 }
 
 public sealed class InviteAcceptRequestDto
