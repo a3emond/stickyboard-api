@@ -19,9 +19,6 @@
 
   <ItemGroup>
     <Folder Include="Docs\" />
-    <Folder Include="Models\BoardsAndCards\" />
-    <Folder Include="Repositories\BoardsAndCards\" />
-    <Folder Include="Repositories\Organizations\" />
   </ItemGroup>
 
 </Project>
