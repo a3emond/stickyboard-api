@@ -34,7 +34,6 @@ public sealed class BoardsController : ControllerBase
             return Unauthorized(ApiResponseDto<BoardDto>.Fail("Invalid or missing token."));
 
         var board = await _boards.CreateAsync(workspaceId, userId, dto, ct);
-
         return Ok(ApiResponseDto<BoardDto>.Ok(board));
     }
 
@@ -47,7 +46,21 @@ public sealed class BoardsController : ControllerBase
         CancellationToken ct)
     {
         var list = await _boards.GetForWorkspaceAsync(workspaceId, ct);
+        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(list));
+    }
 
+    // ------------------------------------------------------------
+    // GET FOR CURRENT USER (effective boards)
+    // ------------------------------------------------------------
+    [HttpGet("me")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<BoardDto>>>> GetForCurrentUser(
+        CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<IEnumerable<BoardDto>>.Fail("Invalid or missing token."));
+
+        var list = await _boards.GetBoardsForUserAsync(userId, ct);
         return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(list));
     }
 
@@ -61,7 +74,6 @@ public sealed class BoardsController : ControllerBase
         CancellationToken ct)
     {
         await _boards.RenameAsync(boardId, dto.Title, ct);
-
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
@@ -74,55 +86,38 @@ public sealed class BoardsController : ControllerBase
         CancellationToken ct)
     {
         await _boards.DeleteAsync(boardId, ct);
-
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
-    // ADD MEMBER (override)
+    // SET ROLE / BLOCK / PROMOTE / DEMOTE (override)
     // ------------------------------------------------------------
-    [HttpPost("{boardId:guid}/members")]
-    public async Task<ActionResult<ApiResponseDto<object>>> AddMember(
-        Guid boardId,
-        [FromBody] BoardAddMemberDto dto,
-        CancellationToken ct)
-    {
-        await _boards.AddMemberAsync(boardId, dto.UserId, dto.Role, ct);
-
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
-    }
-
-    // ------------------------------------------------------------
-    // REMOVE MEMBER
-    // ------------------------------------------------------------
-    [HttpDelete("{boardId:guid}/members/{userId:guid}")]
-    public async Task<ActionResult<ApiResponseDto<object>>> RemoveMember(
-        Guid boardId,
-        Guid userId,
-        CancellationToken ct)
-    {
-        await _boards.RemoveMemberAsync(boardId, userId, ct);
-
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
-    }
-
-    // ------------------------------------------------------------
-    // CHANGE MEMBER ROLE
-    // ------------------------------------------------------------
-    [HttpPut("{boardId:guid}/members/{userId:guid}/role")]
-    public async Task<ActionResult<ApiResponseDto<object>>> ChangeRole(
+    [HttpPost("{boardId:guid}/members/{userId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> SetBoardRole(
         Guid boardId,
         Guid userId,
         [FromQuery] WorkspaceRole role,
         CancellationToken ct)
     {
-        await _boards.ChangeRoleAsync(boardId, userId, role, ct);
-
+        await _boards.SetBoardRoleAsync(boardId, userId, role, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
-    // GET MEMBERS
+    // REMOVE OVERRIDE (fallback to workspace role)
+    // ------------------------------------------------------------
+    [HttpDelete("{boardId:guid}/members/{userId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> RemoveOverride(
+        Guid boardId,
+        Guid userId,
+        CancellationToken ct)
+    {
+        await _boards.RemoveBoardOverrideAsync(boardId, userId, ct);
+        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+    }
+
+    // ------------------------------------------------------------
+    // GET MEMBERS (effective, excluding blocked)
     // ------------------------------------------------------------
     [HttpGet("{boardId:guid}/members")]
     public async Task<ActionResult<ApiResponseDto<IEnumerable<BoardMemberDto>>>> GetMembers(
@@ -130,12 +125,11 @@ public sealed class BoardsController : ControllerBase
         CancellationToken ct)
     {
         var list = await _boards.GetMembersAsync(boardId, ct);
-
         return Ok(ApiResponseDto<IEnumerable<BoardMemberDto>>.Ok(list));
     }
 
     // ------------------------------------------------------------
-    // GET USER ROLE (override check)
+    // GET USER ROLE (effective)
     // ------------------------------------------------------------
     [HttpGet("{boardId:guid}/members/{userId:guid}/role")]
     public async Task<ActionResult<ApiResponseDto<WorkspaceRole?>>> GetUserRole(
@@ -144,7 +138,6 @@ public sealed class BoardsController : ControllerBase
         CancellationToken ct)
     {
         var role = await _boards.GetUserRoleAsync(boardId, userId, ct);
-
         return Ok(ApiResponseDto<WorkspaceRole?>.Ok(role));
     }
 }

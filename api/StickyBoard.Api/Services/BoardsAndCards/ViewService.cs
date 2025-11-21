@@ -5,7 +5,7 @@ using StickyBoard.Api.Models.BoardsAndCards;
 using StickyBoard.Api.Repositories.BoardsAndCards.Contracts;
 using StickyBoard.Api.Services.BoardsAndCards.Contracts;
 
-namespace StickyBoard.Api.Services;
+namespace StickyBoard.Api.Services.BoardsAndCards;
 
 public sealed class ViewService : IViewService
 {

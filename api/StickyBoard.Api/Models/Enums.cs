@@ -31,7 +31,8 @@
         admin,
         moderator,
         member,
-        guest
+        guest,
+        none// for users with no access in board permission override context
     }
 
     // ============================

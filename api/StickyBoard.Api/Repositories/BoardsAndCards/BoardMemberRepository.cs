@@ -18,14 +18,15 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
         => _db.OpenConnectionAsync(ct);
 
     // ---------------------------------------------------------------------
-    // ADD
+    // ADD OR UPDATE OVERRIDE (PROMOTE / DEMOTE / BLOCK)
     // ---------------------------------------------------------------------
-    public async Task<bool> AddAsync(BoardMember entity, CancellationToken ct)
+    public async Task<bool> AddOrUpdateAsync(BoardMember entity, CancellationToken ct)
     {
         const string sql = @"
             INSERT INTO board_members (board_id, user_id, role)
             VALUES (@board_id, @user_id, @role)
-            ON CONFLICT (board_id, user_id) DO NOTHING
+            ON CONFLICT (board_id, user_id)
+            DO UPDATE SET role = EXCLUDED.role
         ";
 
         await using var c = await Conn(ct);
@@ -33,13 +34,13 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
 
         cmd.Parameters.AddWithValue("board_id", entity.BoardId);
         cmd.Parameters.AddWithValue("user_id", entity.UserId);
-        cmd.Parameters.AddWithValue("role", (object?)entity.Role?.ToString() ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("role", entity.Role.ToString());
 
         return await cmd.ExecuteNonQueryAsync(ct) == 1;
     }
 
     // ---------------------------------------------------------------------
-    // REMOVE
+    // REMOVE OVERRIDE (REVERT TO WORKSPACE ROLE)
     // ---------------------------------------------------------------------
     public async Task<bool> RemoveAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
@@ -59,9 +60,9 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
     }
 
     // ---------------------------------------------------------------------
-    // EXISTS
+    // HAS OVERRIDE (NOT EFFECTIVE ROLE)
     // ---------------------------------------------------------------------
-    public async Task<bool> ExistsAsync(Guid boardId, Guid userId, CancellationToken ct)
+    public async Task<bool> HasOverrideAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
         const string sql = @"
             SELECT 1
@@ -80,15 +81,20 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
     }
 
     // ---------------------------------------------------------------------
-    // GET ROLE
+    // EFFECTIVE ROLE (BOARD OVERRIDE → WORKSPACE FALLBACK)
     // ---------------------------------------------------------------------
-    public async Task<WorkspaceRole?> GetRoleAsync(Guid boardId, Guid userId, CancellationToken ct)
+    public async Task<WorkspaceRole?> GetEffectiveRoleAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
         const string sql = @"
-            SELECT role
-            FROM board_members
-            WHERE board_id = @board_id
-              AND user_id = @user_id
+            SELECT COALESCE(bm.role, wm.role)
+            FROM boards b
+            JOIN workspace_members wm
+                ON wm.workspace_id = b.workspace_id
+               AND wm.user_id = @user_id
+            LEFT JOIN board_members bm
+                ON bm.board_id = b.id
+               AND bm.user_id = @user_id
+            WHERE b.id = @board_id
         ";
 
         await using var c = await Conn(ct);
@@ -99,38 +105,100 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
 
         var result = await cmd.ExecuteScalarAsync(ct);
 
-        return result is null
-            ? null
-            : Enum.Parse<WorkspaceRole>(result.ToString()!, true);
+        if (result is null)
+            return null;
+
+        return Enum.Parse<WorkspaceRole>(result.ToString()!, true);
     }
-    
+
     // ---------------------------------------------------------------------
-    // UPDATE ROLE
+    // EFFECTIVE MEMBERS BY BOARD (EXCLUDING BLOCKED)
     // ---------------------------------------------------------------------
-    public async Task<bool> UpdateRoleAsync(Guid boardId, Guid userId, WorkspaceRole role, CancellationToken ct)
+    public async Task<IEnumerable<BoardMember>> GetEffectiveByBoardAsync(Guid boardId, CancellationToken ct)
     {
         const string sql = @"
-        UPDATE board_members
-        SET role = @role
-        WHERE board_id = @board_id
-          AND user_id = @user_id
-    ";
+            SELECT
+                b.id,
+                wm.user_id,
+                COALESCE(bm.role, wm.role) AS role
+            FROM boards b
+            JOIN workspace_members wm
+                ON wm.workspace_id = b.workspace_id
+            LEFT JOIN board_members bm
+                ON bm.board_id = b.id
+               AND bm.user_id = wm.user_id
+            WHERE b.id = @board_id
+              AND COALESCE(bm.role, wm.role) <> 'none'
+        ";
 
         await using var c = await Conn(ct);
         await using var cmd = new NpgsqlCommand(sql, c);
 
         cmd.Parameters.AddWithValue("board_id", boardId);
-        cmd.Parameters.AddWithValue("user_id", userId);
-        cmd.Parameters.AddWithValue("role", role.ToString());
 
-        return await cmd.ExecuteNonQueryAsync(ct) == 1;
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+
+        var list = new List<BoardMember>();
+
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new BoardMember
+            {
+                BoardId = r.GetGuid(0),
+                UserId  = r.GetGuid(1),
+                Role    = Enum.Parse<WorkspaceRole>(r.GetString(2), true)
+            });
+        }
+
+        return list;
     }
 
+    // ---------------------------------------------------------------------
+    // EFFECTIVE BOARDS BY USER (EXCLUDING BLOCKED)
+    // ---------------------------------------------------------------------
+    public async Task<IEnumerable<BoardMember>> GetEffectiveByUserAsync(Guid userId, CancellationToken ct)
+    {
+        const string sql = @"
+            SELECT
+                b.id,
+                @user_id,
+                COALESCE(bm.role, wm.role) AS role
+            FROM boards b
+            JOIN workspace_members wm
+                ON wm.workspace_id = b.workspace_id
+               AND wm.user_id = @user_id
+            LEFT JOIN board_members bm
+                ON bm.board_id = b.id
+               AND bm.user_id = @user_id
+            WHERE COALESCE(bm.role, wm.role) <> 'none'
+        ";
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+
+        cmd.Parameters.AddWithValue("user_id", userId);
+
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+
+        var list = new List<BoardMember>();
+
+        while (await r.ReadAsync(ct))
+        {
+            list.Add(new BoardMember
+            {
+                BoardId = r.GetGuid(0),
+                UserId  = userId,
+                Role    = Enum.Parse<WorkspaceRole>(r.GetString(2), true)
+            });
+        }
+
+        return list;
+    }
 
     // ---------------------------------------------------------------------
-    // GET BY BOARD
+    // RAW OVERRIDES BY BOARD (ADMIN / DEBUG)
     // ---------------------------------------------------------------------
-    public async Task<IEnumerable<BoardMember>> GetByBoardAsync(Guid boardId, CancellationToken ct)
+    public async Task<IEnumerable<BoardMember>> GetOverridesByBoardAsync(Guid boardId, CancellationToken ct)
     {
         const string sql = @"
             SELECT board_id, user_id, role
@@ -152,10 +220,8 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
             list.Add(new BoardMember
             {
                 BoardId = r.GetGuid(0),
-                UserId = r.GetGuid(1),
-                Role = r.IsDBNull(2)
-                    ? null
-                    : Enum.Parse<WorkspaceRole>(r.GetString(2), true)
+                UserId  = r.GetGuid(1),
+                Role    = Enum.Parse<WorkspaceRole>(r.GetString(2), true)
             });
         }
 
@@ -163,9 +229,9 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
     }
 
     // ---------------------------------------------------------------------
-    // GET BY USER
+    // RAW OVERRIDES BY USER (ADMIN / DEBUG)
     // ---------------------------------------------------------------------
-    public async Task<IEnumerable<BoardMember>> GetByUserAsync(Guid userId, CancellationToken ct)
+    public async Task<IEnumerable<BoardMember>> GetOverridesByUserAsync(Guid userId, CancellationToken ct)
     {
         const string sql = @"
             SELECT board_id, user_id, role
@@ -187,10 +253,8 @@ public sealed class BoardMemberRepository : IBoardMemberRepository
             list.Add(new BoardMember
             {
                 BoardId = r.GetGuid(0),
-                UserId = r.GetGuid(1),
-                Role = r.IsDBNull(2)
-                    ? null
-                    : Enum.Parse<WorkspaceRole>(r.GetString(2), true)
+                UserId  = r.GetGuid(1),
+                Role    = Enum.Parse<WorkspaceRole>(r.GetString(2), true)
             });
         }
 

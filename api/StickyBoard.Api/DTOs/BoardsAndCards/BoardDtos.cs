@@ -23,6 +23,7 @@ public sealed class BoardDto
 public sealed class BoardMemberDto
 {
     public Guid UserId { get; set; }
+    public Guid BoardId { get; set; }
     public WorkspaceRole? Role { get; set; }
 }
 

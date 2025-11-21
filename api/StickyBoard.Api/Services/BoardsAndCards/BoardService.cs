@@ -6,7 +6,7 @@ using StickyBoard.Api.Models.BoardsAndCards;
 using StickyBoard.Api.Repositories.BoardsAndCards.Contracts;
 using StickyBoard.Api.Services.BoardsAndCards.Contracts;
 
-namespace StickyBoard.Api.Services;
+namespace StickyBoard.Api.Services.BoardsAndCards;
 
 public sealed class BoardService : IBoardService
 {
@@ -21,9 +21,9 @@ public sealed class BoardService : IBoardService
         _members = members;
     }
 
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     // CREATE
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     public async Task<BoardDto> CreateAsync(
         Guid workspaceId,
         Guid creatorId,
@@ -51,9 +51,9 @@ public sealed class BoardService : IBoardService
         return Map(fresh);
     }
 
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     // GET FOR WORKSPACE
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     public async Task<IEnumerable<BoardDto>> GetForWorkspaceAsync(
         Guid workspaceId,
         CancellationToken ct)
@@ -62,9 +62,30 @@ public sealed class BoardService : IBoardService
         return list.Select(Map);
     }
 
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
+    // GET FOR USER (effective access)
+    // -------------------------------------------------------
+    public async Task<IEnumerable<BoardDto>> GetBoardsForUserAsync(
+        Guid userId,
+        CancellationToken ct)
+    {
+        var memberships = await _members.GetEffectiveByUserAsync(userId, ct);
+
+        var boards = new List<Board>();
+
+        foreach (var m in memberships)
+        {
+            var board = await _boards.GetByIdAsync(m.BoardId, ct);
+            if (board != null)
+                boards.Add(board);
+        }
+
+        return boards.Select(Map);
+    }
+
+    // -------------------------------------------------------
     // RENAME
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     public async Task RenameAsync(
         Guid boardId,
         string title,
@@ -83,9 +104,9 @@ public sealed class BoardService : IBoardService
             throw new ConflictException("Board update conflict.");
     }
 
-    // ---------------------------------------------------------------------
-    // DELETE (soft via RepositoryBase)
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
+    // DELETE
+    // -------------------------------------------------------
     public async Task DeleteAsync(Guid boardId, CancellationToken ct)
     {
         var ok = await _boards.DeleteAsync(boardId, ct);
@@ -93,16 +114,15 @@ public sealed class BoardService : IBoardService
             throw new NotFoundException("Board not found or already deleted.");
     }
 
-    // ---------------------------------------------------------------------
-    // ADD MEMBER (board-level override)
-    // ---------------------------------------------------------------------
-    public async Task AddMemberAsync(
+    // -------------------------------------------------------
+    // SET ROLE / BLOCK / PROMOTE / DEMOTE
+    // -------------------------------------------------------
+    public async Task SetBoardRoleAsync(
         Guid boardId,
         Guid userId,
         WorkspaceRole role,
         CancellationToken ct)
     {
-        // Ensure board exists
         if (!await _boards.ExistsAsync(boardId, ct))
             throw new NotFoundException("Board not found.");
 
@@ -113,16 +133,13 @@ public sealed class BoardService : IBoardService
             Role = role
         };
 
-        var ok = await _members.AddAsync(member, ct);
-
-        if (!ok)
-            throw new ConflictException("User already has a board membership row.");
+        await _members.AddOrUpdateAsync(member, ct);
     }
 
-    // ---------------------------------------------------------------------
-    // REMOVE MEMBER
-    // ---------------------------------------------------------------------
-    public async Task RemoveMemberAsync(
+    // -------------------------------------------------------
+    // REMOVE OVERRIDE (fallback to workspace)
+    // -------------------------------------------------------
+    public async Task RemoveBoardOverrideAsync(
         Guid boardId,
         Guid userId,
         CancellationToken ct)
@@ -130,33 +147,17 @@ public sealed class BoardService : IBoardService
         var ok = await _members.RemoveAsync(boardId, userId, ct);
 
         if (!ok)
-            throw new NotFoundException("Board member not found.");
+            throw new NotFoundException("Board override not found.");
     }
 
-    // ---------------------------------------------------------------------
-    // CHANGE ROLE
-    // ---------------------------------------------------------------------
-    public async Task ChangeRoleAsync(
-        Guid boardId,
-        Guid userId,
-        WorkspaceRole role,
-        CancellationToken ct)
-    {
-        var ok = await _members.UpdateRoleAsync(boardId, userId, role, ct);
-
-        if (!ok)
-            throw new NotFoundException("Board member not found.");
-    }
-
-
-    // ---------------------------------------------------------------------
-    // GET MEMBERS
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
+    // GET EFFECTIVE MEMBERS (excluding blocked)
+    // -------------------------------------------------------
     public async Task<IEnumerable<BoardMemberDto>> GetMembersAsync(
         Guid boardId,
         CancellationToken ct)
     {
-        var members = await _members.GetByBoardAsync(boardId, ct);
+        var members = await _members.GetEffectiveByBoardAsync(boardId, ct);
 
         return members.Select(m => new BoardMemberDto
         {
@@ -165,20 +166,20 @@ public sealed class BoardService : IBoardService
         });
     }
 
-    // ---------------------------------------------------------------------
-    // GET USER ROLE CONVENIENCE
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
+    // GET USER ROLE (effective)
+    // -------------------------------------------------------
     public async Task<WorkspaceRole?> GetUserRoleAsync(
         Guid boardId,
         Guid userId,
         CancellationToken ct)
-        => await _members.GetRoleAsync(boardId, userId, ct);
+    {
+        return await _members.GetEffectiveRoleAsync(boardId, userId, ct);
+    }
 
-    
-
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     // MAPPING
-    // ---------------------------------------------------------------------
+    // -------------------------------------------------------
     private static BoardDto Map(Board b) => new()
     {
         Id = b.Id,

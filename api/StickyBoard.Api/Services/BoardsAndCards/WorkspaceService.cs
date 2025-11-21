@@ -5,7 +5,7 @@ using StickyBoard.Api.Models.BoardsAndCards;
 using StickyBoard.Api.Repositories.BoardsAndCards.Contracts;
 using StickyBoard.Api.Services.BoardsAndCards.Contracts;
 
-namespace StickyBoard.Api.Services;
+namespace StickyBoard.Api.Services.BoardsAndCards;
 
 public sealed class WorkspaceService : IWorkspaceService
 {
@@ -76,6 +76,7 @@ public sealed class WorkspaceService : IWorkspaceService
     // ---------------------------------------------------------------------
     // ADD MEMBER
     // ---------------------------------------------------------------------
+    // TODO: should go through an invitation process instead
     public async Task AddMemberAsync(Guid workspaceId, Guid userId, WorkspaceRole role, CancellationToken ct)
     {
         if (!await _workspaceRepo.ExistsAsync(workspaceId, ct))
