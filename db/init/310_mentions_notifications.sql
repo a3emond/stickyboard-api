@@ -3,7 +3,7 @@
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS mentions (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  entity_type    text NOT NULL CHECK (entity_type IN ('card','comment','message','doc','whiteboard')),
+  entity_type    entity_type NOT NULL CHECK (entity_type IN ('card','comment','message','doc','whiteboard')),
   entity_id      uuid NOT NULL,
   mentioned_user uuid NOT NULL REFERENCES users(id),
   author_id      uuid REFERENCES users(id),

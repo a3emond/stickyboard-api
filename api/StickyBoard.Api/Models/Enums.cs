@@ -49,6 +49,18 @@
         whiteboard,
         chat
     }
+    
+    // ============================
+    // EntityType
+    // ============================
+    public enum EntityType
+    {
+        card,
+        comment,
+        message,
+        doc,
+        whiteboard
+    }
 
     // ============================
     // Cards

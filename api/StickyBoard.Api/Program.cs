@@ -70,6 +70,9 @@ dataSourceBuilder.MapEnum<InviteStatus>("invite_status");
 // Contacts
 dataSourceBuilder.MapEnum<ContactStatus>("contact_status");
 
+// Entity Types (for Mentions)
+dataSourceBuilder.MapEnum<EntityType>("entity_type");
+
 
 
 var dataSource = dataSourceBuilder.Build();

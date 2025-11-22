@@ -11,3 +11,4 @@ DO $$ BEGIN CREATE TYPE notification_type AS ENUM ('mention','reply','assignment
 DO $$ BEGIN CREATE TYPE invite_status     AS ENUM ('pending','accepted','revoked','expired');      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 Do $$ BEGIN CREATE TYPE contact_status    AS ENUM ('pending','accepted','blocked');                 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 Do $$ BEGIN CREATE TYPE invite_scope    AS ENUM ('workspace','board','contact');                 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+Do $$ BEGIN CREATE TYPE entity_type    AS ENUM ('card','comment','message','doc','whiteboard');   EXCEPTION WHEN duplicate_object THEN NULL; END $$;
