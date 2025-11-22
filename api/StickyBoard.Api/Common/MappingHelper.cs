@@ -27,8 +27,8 @@ namespace StickyBoard.Api.Common
                 var targetType = prop.PropertyType;
                 
                 // -----------------------------------------
-// Enum
-// -----------------------------------------
+                // Enum
+                // -----------------------------------------
                 if (targetType.IsEnum)
                 {
                     if (dbValue is int i)
@@ -41,6 +41,14 @@ namespace StickyBoard.Api.Common
                     continue;
                 }
 
+                // -----------------------------------------
+                // Binary: bytea → byte[]
+                // -----------------------------------------
+                if (targetType == typeof(byte[]))
+                {
+                    prop.SetValue(entity, (byte[])dbValue);
+                    continue;
+                }
 
 
                 // -----------------------------------------
