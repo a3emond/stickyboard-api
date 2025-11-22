@@ -25,6 +25,23 @@ namespace StickyBoard.Api.Common
                     continue;
 
                 var targetType = prop.PropertyType;
+                
+                // -----------------------------------------
+// Enum
+// -----------------------------------------
+                if (targetType.IsEnum)
+                {
+                    if (dbValue is int i)
+                        prop.SetValue(entity, Enum.ToObject(targetType, i));
+                    else if (int.TryParse(dbValue.ToString(), out var j))
+                        prop.SetValue(entity, Enum.ToObject(targetType, j));
+                    else
+                        prop.SetValue(entity, Enum.Parse(targetType, dbValue.ToString()!, ignoreCase: true));
+
+                    continue;
+                }
+
+
 
                 // -----------------------------------------
                 // JSON: jsonb → JsonDocument

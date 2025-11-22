@@ -76,7 +76,7 @@ public sealed class ViewRepository : RepositoryBase<View>, IViewRepository
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<View>> GetForBoardAsync(Guid boardId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM views
             WHERE board_id = @board_id

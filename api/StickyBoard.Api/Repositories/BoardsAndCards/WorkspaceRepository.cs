@@ -60,7 +60,7 @@ public sealed class WorkspaceRepository : RepositoryBase<Workspace>, IWorkspaceR
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<Workspace>> GetForUserAsync(Guid userId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT w.*
             FROM workspaces w
             JOIN workspace_members wm ON wm.workspace_id = w.id
@@ -129,7 +129,7 @@ public sealed class WorkspaceRepository : RepositoryBase<Workspace>, IWorkspaceR
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<Workspace>> SearchByNameAsync(string query, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM workspaces
             WHERE name ILIKE @q

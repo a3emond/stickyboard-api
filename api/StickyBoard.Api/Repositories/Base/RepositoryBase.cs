@@ -26,7 +26,7 @@ namespace StickyBoard.Api.Repositories.Base
         private bool SoftEnabled => typeof(ISoftDeletable).IsAssignableFrom(typeof(T));
         private bool IncludeDeleted => this is IAllowDeleted allow && allow.IncludeDeleted;
 
-        protected string ApplySoftDelete(string sql)
+        protected string ApplySoftDeleteFilter(string sql)
         {
             if (!SoftEnabled || IncludeDeleted)
                 return sql;
@@ -56,7 +56,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<T?> GetByIdAsync(Guid id, CancellationToken ct)
         {
-            var sql = ApplySoftDelete($"SELECT * FROM {Table} WHERE id = @id");
+            var sql = ApplySoftDeleteFilter($"SELECT * FROM {Table} WHERE id = @id");
 
             await using var c = await Conn(ct);
             await using var cmd = new NpgsqlCommand(sql, c);
@@ -83,7 +83,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<IEnumerable<T>> GetAllAsync(CancellationToken ct)
         {
-            var sql = ApplySoftDelete($"SELECT * FROM {Table}");
+            var sql = ApplySoftDeleteFilter($"SELECT * FROM {Table}");
 
             await using var c = await Conn(ct);
             await using var cmd = new NpgsqlCommand(sql, c);
@@ -97,7 +97,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<bool> ExistsAsync(Guid id, CancellationToken ct)
         {
-            var sql = ApplySoftDelete($"SELECT 1 FROM {Table} WHERE id = @id");
+            var sql = ApplySoftDeleteFilter($"SELECT 1 FROM {Table} WHERE id = @id");
 
             await using var c = await Conn(ct);
             await using var cmd = new NpgsqlCommand(sql, c);
@@ -111,7 +111,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<int> CountAsync(CancellationToken ct)
         {
-            var sql = ApplySoftDelete($"SELECT COUNT(*) FROM {Table}");
+            var sql = ApplySoftDeleteFilter($"SELECT COUNT(*) FROM {Table}");
 
             await using var c = await Conn(ct);
             await using var cmd = new NpgsqlCommand(sql, c);
@@ -124,7 +124,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<PagedResult<T>> GetPagedAsync(int limit, int offset, CancellationToken ct)
         {
-            var sql = ApplySoftDelete($@"
+            var sql = ApplySoftDeleteFilter($@"
                 SELECT *, COUNT(*) OVER() AS total_count
                 FROM {Table}
                 ORDER BY updated_at DESC
@@ -154,7 +154,7 @@ namespace StickyBoard.Api.Repositories.Base
         // ---------------------------------------------------------------------
         public async Task<IEnumerable<T>> GetUpdatedSinceAsync(DateTime since, CancellationToken ct)
         {
-            var sql = ApplySoftDelete($@"
+            var sql = ApplySoftDeleteFilter($@"
                 SELECT * FROM {Table}
                 WHERE updated_at > @since");
 
@@ -169,7 +169,7 @@ namespace StickyBoard.Api.Repositories.Base
         public async Task<PagedResult<T>> GetUpdatedSincePagedAsync(
             DateTime since, int limit, int offset, CancellationToken ct)
         {
-            var sql = ApplySoftDelete($@"
+            var sql = ApplySoftDeleteFilter($@"
                 SELECT *, COUNT(*) OVER() AS total_count
                 FROM {Table}
                 WHERE updated_at > @since

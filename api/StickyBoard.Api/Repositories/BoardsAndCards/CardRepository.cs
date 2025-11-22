@@ -128,7 +128,7 @@ public sealed class CardRepository : RepositoryBase<Card>, ICardRepository
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<Card>> GetByBoardAsync(Guid boardId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM cards
             WHERE board_id = @board_id
@@ -149,7 +149,7 @@ public sealed class CardRepository : RepositoryBase<Card>, ICardRepository
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<Card>> SearchAsync(Guid boardId, string q, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM cards
             WHERE board_id = @board_id

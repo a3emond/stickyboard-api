@@ -65,7 +65,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
     // ============================================================
     public async Task<User?> GetByEmailAsync(string email, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT * FROM users
             WHERE LOWER(email) = LOWER(@em)
             LIMIT 1;
@@ -81,7 +81,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT 1 FROM users
             WHERE LOWER(email) = LOWER(@em);
         ");
@@ -95,7 +95,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
 
     public async Task<IEnumerable<User>> SearchByDisplayNameAsync(string partial, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT * FROM users
             WHERE display_name ILIKE @pattern
             ORDER BY display_name ASC;
@@ -117,7 +117,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
     public async Task<PagedResult<User>> SearchByDisplayNamePagedAsync(
         string partial, int limit, int offset, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *,
                    COUNT(*) OVER() AS total_count
             FROM users
@@ -151,7 +151,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
         var idArray = ids as Guid[] ?? ids.ToArray();
         if (idArray.Length == 0) return Array.Empty<User>();
 
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT * FROM users
             WHERE id = ANY(@ids);
         ");
@@ -176,7 +176,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
 
         var lower = arr.Select(s => s.ToLowerInvariant()).ToArray();
 
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT * FROM users
             WHERE LOWER(email) = ANY(@ems);
         ");
@@ -199,7 +199,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
     // ============================================================
     public async Task<string[]> GetAllUserGroupsAsync(Guid userId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT groups FROM users
             WHERE id = @uid;
         ");
@@ -320,7 +320,7 @@ public sealed class UserRepository : RepositoryBase<User>, IUserRepository
 
     public async Task<IEnumerable<User>> GetUsersByGroupAsync(string group, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT * FROM users
             WHERE @grp = ANY(groups);
         ");

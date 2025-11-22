@@ -77,7 +77,7 @@ public sealed class BoardRepository : RepositoryBase<Board>, IBoardRepository
     // ---------------------------------------------------------------------
     public async Task<IEnumerable<Board>> GetForWorkspaceAsync(Guid workspaceId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM boards
             WHERE workspace_id = @workspace_id

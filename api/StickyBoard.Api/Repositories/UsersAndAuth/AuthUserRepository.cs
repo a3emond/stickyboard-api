@@ -64,7 +64,7 @@ public sealed class AuthUserRepository : RepositoryBase<AuthUser>, IAuthUserRepo
     // ------------------------------------------------------------
     public async Task<AuthUser?> GetByUserIdAsync(Guid userId, CancellationToken ct)
     {
-        var sql = ApplySoftDelete(@"
+        var sql = ApplySoftDeleteFilter(@"
             SELECT *
             FROM auth_users
             WHERE user_id = @uid
