@@ -46,32 +46,29 @@ else
 
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 
-// Users & Auth
 dataSourceBuilder.MapEnum<UserRole>("user_role");
-
-// Workspaces
 dataSourceBuilder.MapEnum<WorkspaceRole>("workspace_role");
-
-// Views
 dataSourceBuilder.MapEnum<ViewType>("view_type");
-
-// Cards
 dataSourceBuilder.MapEnum<CardStatus>("card_status");
-
-// Messaging / Channels
 dataSourceBuilder.MapEnum<MessageChannel>("message_channel");
-
-// Notifications
 dataSourceBuilder.MapEnum<NotificationType>("notification_type");
-
-// Invites
 dataSourceBuilder.MapEnum<InviteStatus>("invite_status");
-
-// Contacts
+dataSourceBuilder.MapEnum<InviteScope>("invite_scope");
 dataSourceBuilder.MapEnum<ContactStatus>("contact_status");
-
-// Entity Types (for Mentions)
 dataSourceBuilder.MapEnum<EntityType>("entity_type");
+
+dataSourceBuilder.MapEnum<WorkerJobKind>("worker_job_kind");
+dataSourceBuilder.MapEnum<WorkerJobStatus>("worker_job_status");
+dataSourceBuilder.MapEnum<PushProvider>("push_provider");
+dataSourceBuilder.MapEnum<NotificationChannel>("notification_channel");
+dataSourceBuilder.MapEnum<SyncScopeType>("sync_scope_type");
+dataSourceBuilder.MapEnum<AttachmentStatus>("attachment_status");
+dataSourceBuilder.MapEnum<AttachmentVariantType>("attachment_variant_type");
+dataSourceBuilder.MapEnum<OutboxTopic>("outbox_topic");
+dataSourceBuilder.MapEnum<OutboxOperation>("outbox_operation");
+dataSourceBuilder.MapEnum<FileTokenAudience>("file_token_audience");
+
+
 
 
 

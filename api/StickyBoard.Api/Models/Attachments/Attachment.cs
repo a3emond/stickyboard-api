@@ -38,7 +38,7 @@ public sealed class Attachment : IEntityUpdatable, ISoftDeletable, IVersionedEnt
     public bool IsPublic { get; set; }
 
     [Column("status")]
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; } = AttachmentStatus.Pending;
 
     [Column("meta")]
     public JsonDocument? Meta { get; set; }

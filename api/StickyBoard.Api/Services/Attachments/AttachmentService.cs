@@ -1,4 +1,5 @@
 ﻿using StickyBoard.Api.DTOs.Attachments;
+using StickyBoard.Api.Models;
 using StickyBoard.Api.Models.Attachments;
 using StickyBoard.Api.Repositories.Attachments.Contracts;
 using StickyBoard.Api.Services.Attachments.Contracts;
@@ -47,7 +48,7 @@ public sealed class AttachmentService : IAttachmentService
         if (dto.Mime is not null) existing.Mime = dto.Mime;
         if (dto.ByteSize.HasValue) existing.ByteSize = dto.ByteSize;
         if (dto.IsPublic.HasValue) existing.IsPublic = dto.IsPublic.Value;
-        if (dto.Status is not null) existing.Status = dto.Status;
+        if (dto.Status is not null) existing.Status = (AttachmentStatus)dto.Status;
         if (dto.Meta is not null) existing.Meta = dto.Meta;
 
         existing.Version = dto.Version;

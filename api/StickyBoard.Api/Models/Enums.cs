@@ -119,5 +119,121 @@
         accepted,
         blocked
     }
+    
+    // =====================
+    // Worker Jobs
+    // =====================
 
+    public enum WorkerJobKind
+    {
+        OutboxDispatch,
+        AssetVariant,
+        InviteEmail,
+        MentionNotify,
+        NotificationPush,
+        ScheduledReminder,
+        SearchIndex,
+        CdnGarbageCollect,
+        AnalyticsAggregate,
+        Cleanup
+    }
+
+    public enum WorkerJobStatus
+    {
+        Queued,
+        Running,
+        Done,
+        Dead
+    }
+
+
+// =====================
+// Push / Notifications
+// =====================
+
+    public enum PushProvider
+    {
+        Fcm,
+        Apns,
+        WebPush
+    }
+
+    public enum NotificationChannel
+    {
+        InApp,
+        Push,
+        Email
+    }
+
+
+// =====================
+// Sync
+// =====================
+
+    public enum SyncScopeType
+    {
+        Workspace,
+        Board,
+        Inbox
+    }
+
+    public enum OutboxTopic
+    {
+        User,
+        Workspace,
+        WorkspaceMember,
+        Board,
+        BoardMember,
+        View,
+        Card,
+        Comment,
+        Message,
+        Attachment,
+        Invite,
+        Inbox,
+        Mention,
+        Notification,
+        UserContact
+    }
+
+    public enum OutboxOperation
+    {
+        Upsert,
+        Delete
+    }
+
+// =====================
+// Attachments
+// =====================
+
+    public enum AttachmentStatus
+    {
+        Pending,
+        Processing,
+        Ready,
+        Failed,
+        Deleted
+    }
+
+    public enum AttachmentVariantType
+    {
+        Original,
+        Thumb,
+        Preview,
+        Full,
+        Transcoded,
+        Poster,
+        Waveform,
+        PdfPreview,
+        DocPreview,
+        TextExtract
+    }
+
+    public enum FileTokenAudience
+    {
+        Download,
+        Preview,
+        Stream,
+        Upload
+    }
 }

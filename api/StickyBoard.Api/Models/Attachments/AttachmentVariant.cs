@@ -13,7 +13,7 @@ public sealed class AttachmentVariant : IEntityUpdatable
     public Guid ParentId { get; set; }
 
     [Column("variant")]
-    public string Variant { get; set; } = null!;
+    public AttachmentVariantType Variant { get; init; }
 
     [Column("mime")]
     public string Mime { get; set; } = null!;
@@ -34,7 +34,7 @@ public sealed class AttachmentVariant : IEntityUpdatable
     public string StoragePath { get; set; } = null!;
 
     [Column("status")]
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; } = AttachmentStatus.Pending;
 
     [Column("checksum_sha256")]
     public byte[]? ChecksumSha256 { get; set; }

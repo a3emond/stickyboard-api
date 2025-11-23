@@ -1,4 +1,5 @@
 ﻿using StickyBoard.Api.DTOs.Attachments;
+using StickyBoard.Api.Models;
 using StickyBoard.Api.Models.Attachments;
 using StickyBoard.Api.Repositories.Attachments.Contracts;
 using StickyBoard.Api.Services.Attachments.Contracts;
@@ -48,7 +49,7 @@ public sealed class AttachmentVariantService : IAttachmentVariantService
         if (dto.Height.HasValue) existing.Height = dto.Height;
         if (dto.DurationMs.HasValue) existing.DurationMs = dto.DurationMs;
         if (dto.StoragePath is not null) existing.StoragePath = dto.StoragePath;
-        if (dto.Status is not null) existing.Status = dto.Status;
+        if (dto.Status is not null) existing.Status = (AttachmentStatus)dto.Status;
         if (dto.ChecksumSha256 is not null) existing.ChecksumSha256 = dto.ChecksumSha256;
 
         return await _variants.UpdateAsync(existing, ct);
@@ -64,11 +65,14 @@ public sealed class AttachmentVariantService : IAttachmentVariantService
     {
         var list = await _variants.GetForParentAsync(parentId, ct);
 
-        var v = list.FirstOrDefault(x =>
-            string.Equals(x.Variant, variant, StringComparison.OrdinalIgnoreCase));
+        if (!Enum.TryParse<AttachmentVariantType>(variant, true, out var parsedVariant))
+            return null;
+
+        var v = list.FirstOrDefault(x => x.Variant == parsedVariant);
 
         return v is null ? null : Map(v);
     }
+
 
     private static AttachmentVariantDto Map(AttachmentVariant v) => new()
     {

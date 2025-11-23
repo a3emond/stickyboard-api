@@ -1,10 +1,6 @@
--- ============================================================================
+--------------------------------------------------
 -- ATTACHMENTS (CDN-BACKED METADATA)
--- ============================================================================
-
----------------------------------------------------
--- 1.1 attachments (original logical file)
----------------------------------------------------
+--------------------------------------------------
 CREATE TABLE attachments (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id    uuid REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -18,7 +14,7 @@ CREATE TABLE attachments (
   storage_path    text NOT NULL,
   is_public       boolean NOT NULL DEFAULT false,
 
-  status          text NOT NULL DEFAULT 'ready',
+  status          attachment_status NOT NULL DEFAULT 'pending',
   meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
 
   uploaded_by     uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -42,8 +38,8 @@ CREATE TRIGGER trg_attach_version
   BEFORE UPDATE ON attachments
   FOR EACH ROW EXECUTE FUNCTION bump_version();
 
+DROP CONSTRAINT IF EXISTS attachments_ready_requires_storage_path;
 
--- Add a CHECK constraint for READY
 ALTER TABLE attachments
 ADD CONSTRAINT attachments_ready_requires_storage_path
 CHECK (

@@ -1,11 +1,13 @@
-﻿namespace StickyBoard.Api.DTOs.Attachments;
+﻿using StickyBoard.Api.Models;
+
+namespace StickyBoard.Api.DTOs.Attachments;
 
 public sealed class AttachmentVariantDto
 {
     public Guid Id { get; set; }
     public Guid ParentId { get; set; }
 
-    public string Variant { get; set; } = string.Empty;
+    public AttachmentVariantType Variant { get; set; }
     public string Mime { get; set; } = string.Empty;
 
     public long? ByteSize { get; set; }
@@ -14,7 +16,7 @@ public sealed class AttachmentVariantDto
     public int? DurationMs { get; set; }
 
     public string StoragePath { get; set; } = string.Empty;
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; }
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -24,7 +26,7 @@ public sealed class AttachmentVariantCreateDto
 {
     public Guid ParentId { get; set; }
 
-    public string Variant { get; set; } = string.Empty;
+    public AttachmentVariantType Variant { get; set; }
     public string Mime { get; set; } = string.Empty;
 
     public long? ByteSize { get; set; }
@@ -33,7 +35,7 @@ public sealed class AttachmentVariantCreateDto
     public int? DurationMs { get; set; }
 
     public string StoragePath { get; set; } = string.Empty;
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; }
 
     public byte[]? ChecksumSha256 { get; set; }
 }
@@ -48,7 +50,7 @@ public sealed class AttachmentVariantUpdateDto
     public int? DurationMs { get; set; }
 
     public string? StoragePath { get; set; }
-    public string? Status { get; set; }
+    public AttachmentStatus? Status { get; set; }
 
     public byte[]? ChecksumSha256 { get; set; }
 }

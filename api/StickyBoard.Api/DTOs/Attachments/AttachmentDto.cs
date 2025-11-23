@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using StickyBoard.Api.Models;
 
 namespace StickyBoard.Api.DTOs.Attachments;
 
@@ -18,7 +19,7 @@ public sealed class AttachmentDto
     public string StoragePath { get; set; } = string.Empty;
     public bool IsPublic { get; set; }
 
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; } = AttachmentStatus.Pending;
     public JsonDocument? Meta { get; set; }
 
     public Guid? UploadedBy { get; set; }
@@ -42,7 +43,7 @@ public sealed class AttachmentCreateDto
     public string StoragePath { get; set; } = string.Empty;
     public bool IsPublic { get; set; }
 
-    public string Status { get; set; } = "ready";
+    public AttachmentStatus Status { get; set; } = AttachmentStatus.Pending;
     public JsonDocument? Meta { get; set; }
 }
 
@@ -54,7 +55,7 @@ public sealed class AttachmentUpdateDto
     public long? ByteSize { get; set; }
 
     public bool? IsPublic { get; set; }
-    public string? Status { get; set; }
+    public AttachmentStatus? Status { get; set; }
     public JsonDocument? Meta { get; set; }
 
     public int Version { get; set; }
