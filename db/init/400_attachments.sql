@@ -38,7 +38,9 @@ CREATE TRIGGER trg_attach_version
   BEFORE UPDATE ON attachments
   FOR EACH ROW EXECUTE FUNCTION bump_version();
 
+ALTER TABLE attachments
 DROP CONSTRAINT IF EXISTS attachments_ready_requires_storage_path;
+
 
 ALTER TABLE attachments
 ADD CONSTRAINT attachments_ready_requires_storage_path

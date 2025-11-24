@@ -30,8 +30,8 @@ services:
   # ==========================================================
   api:
     build: 
-      context: ./api
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: api/Dockerfile
     container_name: stickyboard_api
     depends_on:
       - postgres
@@ -53,26 +53,25 @@ services:
   # ==========================================================
   # StickyBoard Background Worker
   # ==========================================================
-  # worker:
-  #   build:
-  #     context: ./worker
-  #     dockerfile: Dockerfile
-  #   container_name: stickyboard_worker
-  #   depends_on:
-  #     - postgres
-  #     - api
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST:-postgres}:5432/${POSTGRES_DB}
-  #     ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
-  #     WORKER_API_KEY: ${WORKER_API_KEY}
-  #   volumes:
-  #     - ./worker:/app
-  #     - ./logs/worker:/app/logs
-  #   restart: unless-stopped
-  #   networks:
-  #     - sticky_net
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: stickyboard_worker
+    depends_on:
+      - postgres
+      - api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DB_HOST:-postgres}:5432/${POSTGRES_DB}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      WORKER_API_KEY: ${WORKER_API_KEY}
+    volumes:
+      - ./logs/worker:/app/logs
+    restart: unless-stopped
+    networks:
+      - sticky_net
 
 # ==========================================================
 # Networks & Volumes

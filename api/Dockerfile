@@ -1,23 +1,19 @@
-# ---------- Build stage ----------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy csproj first (only project, not everything)
-COPY StickyBoard.Api/StickyBoard.Api.csproj ./StickyBoard.Api/
-RUN dotnet restore StickyBoard.Api/StickyBoard.Api.csproj
+COPY api/StickyBoard.Api/StickyBoard.Api.csproj api/StickyBoard.Api/
+COPY Core/StickyBoard.Core/StickyBoard.Core.csproj Core/StickyBoard.Core/
 
-# Copy all remaining files
+RUN dotnet restore api/StickyBoard.Api/StickyBoard.Api.csproj
+
 COPY . .
-WORKDIR /src/StickyBoard.Api
 
-# Build & publish
+WORKDIR /src/api/StickyBoard.Api
 RUN dotnet publish -c Release -o /app/publish
 
-# ---------- Runtime stage ----------
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 
-# Copy published output from build stage
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_URLS=http://+:8080
