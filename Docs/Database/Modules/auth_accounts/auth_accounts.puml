@@ -1,0 +1,46 @@
+@startuml auth_accounts
+!theme blueprint
+
+entity users {
+  *id : uuid
+  --
+  email : text
+  display_name : text
+  prefs : jsonb
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity auth_users {
+  *user_id : uuid
+  --
+  password_hash : text
+  role : user_role
+}
+
+entity refresh_tokens {
+  *token_hash : text
+  --
+  user_id : uuid
+  user_agent : text
+  ip_addr : inet
+  issued_at : timestamptz
+  expires_at : timestamptz
+  revoked : boolean
+}
+
+entity user_contacts {
+  *user_id : uuid
+  *contact_id : uuid
+  --
+  status : text
+  created_at : timestamptz
+  accepted_at : timestamptz
+}
+
+users ||--o{ auth_users
+users ||--o{ refresh_tokens
+users ||--o{ user_contacts : initiator
+users ||--o{ user_contacts : contact
+
+@enduml

@@ -1,9 +1,10 @@
 ﻿using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using StickyBoard.Api.Common.Exceptions;
-using StickyBoard.Api.DTOs; // DomainException namespace
-using StickyBoard.Api.Models; // ErrorCode enum
+using StickyBoard.Core.Common.Exceptions;
+using StickyBoard.Core.DTOs.Common;
+using StickyBoard.Core.Models;
+
 
 namespace StickyBoard.Api.Middleware
 {

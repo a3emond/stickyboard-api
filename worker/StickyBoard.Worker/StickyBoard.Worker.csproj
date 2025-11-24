@@ -11,12 +11,10 @@
         <PackageReference Include="DotNetEnv" Version="3.0.0" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
         <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.0" />
-        <PackageReference Include="Npgsql" Version="10.0.0-rc.1" />
     </ItemGroup>
 
-
     <ItemGroup>
-        <ProjectReference Include="..\..\api\StickyBoard.Api\StickyBoard.Api.csproj" />
+      <ProjectReference Include="..\..\Core\StickyBoard.Core\StickyBoard.Core.csproj" />
     </ItemGroup>
 
 

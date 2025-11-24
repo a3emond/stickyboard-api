@@ -1,0 +1,43 @@
+@startuml sync_outbox_worker
+!theme blueprint
+
+entity users {
+ *id : uuid
+}
+
+entity event_outbox {
+  *cursor : bigserial
+  --
+  topic : text
+  entity_id : uuid
+  workspace_id : uuid
+  board_id : uuid
+}
+
+entity sync_cursors {
+  *user_id : uuid
+  *scope_type : text
+  *scope_id : uuid
+  --
+  last_cursor : bigint
+}
+
+entity worker_jobs {
+  *id : bigserial
+  --
+  kind : text
+  status : text
+  available_at : timestamptz
+}
+
+entity worker_job_attempts {
+  *id : bigserial
+  --
+  job_id : bigint
+  error : text
+}
+
+users ||--o{ sync_cursors
+worker_jobs ||--o{ worker_job_attempts
+
+@enduml

@@ -1,0 +1,29 @@
+@startuml
+!theme blueprint
+
+entity users {
+ *id :uuid
+}
+entity workspaces {
+ *id :uuid
+}
+entity boards {
+ *id : uuid
+}
+
+entity invites {
+  *id : uuid
+  --
+  sender_id : uuid
+  email : text
+  workspace_id : uuid
+  board_id : uuid
+  status : invite_status
+  accepted_by : uuid
+}
+
+users ||--o{ invites : sent
+users ||--o{ invites : accepted
+workspaces ||--o{ invites
+boards ||--o{ invites
+@enduml

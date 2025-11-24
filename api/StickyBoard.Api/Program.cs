@@ -4,16 +4,14 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Npgsql;
-using StickyBoard.Api.Auth;
+using StickyBoard.Api.Common;
 using StickyBoard.Api.Common.Filters;
 using StickyBoard.Api.Middleware;
-using StickyBoard.Api.Models;
-using StickyBoard.Api.Services;
-using StickyBoard.Api.Repositories.BoardsAndCards;
-using StickyBoard.Api.Repositories.Organizations;
-using StickyBoard.Api.Repositories.SocialAndMessaging;
-using StickyBoard.Api.Repositories.UsersAndAuth;
+using StickyBoard.Core.Auth;
+using StickyBoard.Core.Infrastructure.Db;
+using StickyBoard.Core.Repositories.SocialAndMessaging;
+using StickyBoard.Core.Repositories.UsersAndAuth;
+using StickyBoard.Core.Services.UsersAndAuth;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -21,53 +19,16 @@ var configuration = builder.Configuration;
 // ==========================================================
 // 1. DATABASE CONNECTION (NpgsqlDataSource with Enum Mapping)
 // ==========================================================
-var dbHost = configuration["DB_HOST"] ?? "localhost";
-var dbUser = configuration["POSTGRES_USER"];
-var dbPass = configuration["POSTGRES_PASSWORD"];
-var dbName = configuration["POSTGRES_DB"];
 
-string connectionString;
+var connectionString = ConnectionStringBuilder.Build(configuration);
+var dataSource       = DataSourceFactory.Create(connectionString);
 
-var dbUrl = configuration["DATABASE_URL"];
-if (!string.IsNullOrEmpty(dbUrl) && dbUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
-{
-    var uri = new Uri(dbUrl);
-    var userInfo = uri.UserInfo.Split(':');
-    var user = userInfo.Length > 0 ? userInfo[0] : string.Empty;
-    var pass = userInfo.Length > 1 ? userInfo[1] : string.Empty;
-    var host = uri.Host;
-    var port = uri.Port > 0 ? uri.Port : 5432;
-    var database = uri.AbsolutePath.TrimStart('/');
-
-    connectionString = $"Host={host};Port={port};Database={database};Username={user};Password={pass};SSL Mode=Prefer;Trust Server Certificate=true";
-}
-else
-{
-    connectionString = $"Host={dbHost};Database={dbName};Username={dbUser};Password={dbPass};SSL Mode=Prefer;Trust Server Certificate=true";
-}
-
-var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-dataSourceBuilder.MapEnum<UserRole>("user_role");
-dataSourceBuilder.MapEnum<BoardRole>("board_role");
-dataSourceBuilder.MapEnum<OrgRole>("org_role");
-dataSourceBuilder.MapEnum<BoardVisibility>("board_visibility");
-dataSourceBuilder.MapEnum<TabScope>("tab_scope");
-dataSourceBuilder.MapEnum<TabType>("tab_type");
-dataSourceBuilder.MapEnum<CardType>("card_type");
-dataSourceBuilder.MapEnum<CardStatus>("card_status");
-dataSourceBuilder.MapEnum<MessageType>("message_type");
-dataSourceBuilder.MapEnum<MessageStatus>("message_status");
-dataSourceBuilder.MapEnum<RelationStatus>("relation_status");
-
-
-var dataSource = dataSourceBuilder.Build();
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
-
 // ----------------------------------------------------------
 // Core Auth / Users
 // ----------------------------------------------------------
@@ -80,53 +41,21 @@ builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
 // ----------------------------------------------------------
-// Boards / Folders / Permissions / Tabs / Sections / Cards
+// Boards / Cards
 // ----------------------------------------------------------
-builder.Services.AddScoped<BoardRepository>();
-builder.Services.AddScoped<BoardService>();
 
-builder.Services.AddScoped<BoardFolderRepository>();
-builder.Services.AddScoped<BoardFolderService>();
-
-builder.Services.AddScoped<PermissionRepository>();
-builder.Services.AddScoped<PermissionService>();
-
-builder.Services.AddScoped<TabRepository>();
-builder.Services.AddScoped<TabService>();
-
-builder.Services.AddScoped<SectionRepository>();
-builder.Services.AddScoped<SectionService>();
-
-builder.Services.AddScoped<CardRepository>();
-builder.Services.AddScoped<CardService>();
 
 // ----------------------------------------------------------
 // Card Comments & Board Chat Messages
 // ----------------------------------------------------------
-builder.Services.AddScoped<CardCommentRepository>();
-builder.Services.AddScoped<CardCommentService>();
 
-builder.Services.AddScoped<BoardMessageRepository>();
-builder.Services.AddScoped<BoardMessageService>();
-
-// ----------------------------------------------------------
-// Organizations
-// ----------------------------------------------------------
-builder.Services.AddScoped<OrganizationRepository>();
-builder.Services.AddScoped<OrganizationMemberRepository>();
-builder.Services.AddScoped<OrganizationService>();
 
 // ----------------------------------------------------------
 // Messaging / Invites / User Relations
 // ----------------------------------------------------------
-builder.Services.AddScoped<MessageRepository>();
-builder.Services.AddScoped<MessageService>();
 
 builder.Services.AddScoped<InviteRepository>();
-builder.Services.AddScoped<InviteService>();
 
-builder.Services.AddScoped<UserRelationRepository>();
-builder.Services.AddScoped<UserRelationService>();
 
 // ==========================================================
 // 3. AUTHENTICATION & AUTHORIZATION (JWT + API KEY)

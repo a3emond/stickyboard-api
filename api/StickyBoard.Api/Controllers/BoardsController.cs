@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs;
-using StickyBoard.Api.Services;
+using StickyBoard.Core.DTOs.BoardsAndCards;
+using StickyBoard.Core.DTOs.Common;
+using StickyBoard.Core.Models;
+using StickyBoard.Core.Services.BoardsAndCards.Contracts;
 
 namespace StickyBoard.Api.Controllers;
 
@@ -11,122 +13,131 @@ namespace StickyBoard.Api.Controllers;
 [Authorize]
 public sealed class BoardsController : ControllerBase
 {
-    private readonly BoardService _service;
+    private readonly IBoardService _boards;
 
-    public BoardsController(BoardService service)
+    public BoardsController(IBoardService boards)
     {
-        _service = service;
-    }
-
-    private Guid CurrentUserId() => User.GetUserId();
-
-    // ------------------------------------------------------------
-    // GET: mine
-    // ------------------------------------------------------------
-    [HttpGet("mine")]
-    public async Task<IActionResult> Mine(CancellationToken ct)
-    {
-        var userId = CurrentUserId();
-        var boards = await _service.GetMineAsync(userId, ct);
-        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(boards));
+        _boards = boards;
     }
 
     // ------------------------------------------------------------
-    // GET: accessible
+    // CREATE
     // ------------------------------------------------------------
-    [HttpGet("accessible")]
-    public async Task<IActionResult> Accessible(CancellationToken ct)
+    [HttpPost("{workspaceId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<BoardDto>>> Create(
+        Guid workspaceId,
+        [FromBody] BoardCreateDto dto,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        var boards = await _service.GetAccessibleAsync(userId, ct);
-        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(boards));
-    }
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<BoardDto>.Fail("Invalid or missing token."));
 
-    // ------------------------------------------------------------
-    // GET: search?keyword=abc
-    // ------------------------------------------------------------
-    [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string keyword, CancellationToken ct)
-    {
-        var userId = CurrentUserId();
-        var boards = await _service.SearchAccessibleAsync(userId, keyword, ct);
-        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(boards));
-    }
-
-    // ------------------------------------------------------------
-    // GET: /{id}
-    // ------------------------------------------------------------
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
-    {
-        var userId = CurrentUserId();
-        var board = await _service.GetAsync(userId, id, ct);
+        var board = await _boards.CreateAsync(workspaceId, userId, dto, ct);
         return Ok(ApiResponseDto<BoardDto>.Ok(board));
     }
 
     // ------------------------------------------------------------
-    // POST: create
+    // GET FOR WORKSPACE
     // ------------------------------------------------------------
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] BoardCreateDto dto, CancellationToken ct)
+    [HttpGet("workspace/{workspaceId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<BoardDto>>>> GetForWorkspace(
+        Guid workspaceId,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        var id = await _service.CreateAsync(userId, dto, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { id }));
+        var list = await _boards.GetForWorkspaceAsync(workspaceId, ct);
+        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(list));
     }
 
     // ------------------------------------------------------------
-    // PUT: update
+    // GET FOR CURRENT USER (effective boards)
     // ------------------------------------------------------------
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] BoardUpdateDto dto, CancellationToken ct)
+    [HttpGet("me")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<BoardDto>>>> GetForCurrentUser(
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        await _service.UpdateAsync(userId, id, dto, ct);
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<IEnumerable<BoardDto>>.Fail("Invalid or missing token."));
+
+        var list = await _boards.GetBoardsForUserAsync(userId, ct);
+        return Ok(ApiResponseDto<IEnumerable<BoardDto>>.Ok(list));
+    }
+
+    // ------------------------------------------------------------
+    // RENAME
+    // ------------------------------------------------------------
+    [HttpPut("{boardId:guid}/rename")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Rename(
+        Guid boardId,
+        [FromBody] BoardRenameDto dto,
+        CancellationToken ct)
+    {
+        await _boards.RenameAsync(boardId, dto.Title, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
     // DELETE
     // ------------------------------------------------------------
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    [HttpDelete("{boardId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Delete(
+        Guid boardId,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        await _service.DeleteAsync(userId, id, ct);
+        await _boards.DeleteAsync(boardId, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
-    // PATCH: rename
+    // SET ROLE / BLOCK / PROMOTE / DEMOTE (override)
     // ------------------------------------------------------------
-    [HttpPatch("{id:guid}/rename")]
-    public async Task<IActionResult> Rename(Guid id, [FromBody] RenameBoardDto dto, CancellationToken ct)
+    [HttpPost("{boardId:guid}/members/{userId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> SetBoardRole(
+        Guid boardId,
+        Guid userId,
+        [FromQuery] WorkspaceRole role,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        await _service.RenameAsync(userId, id, dto.Title, ct);
+        await _boards.SetBoardRoleAsync(boardId, userId, role, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
-    // PATCH: move folder
+    // REMOVE OVERRIDE (fallback to workspace role)
     // ------------------------------------------------------------
-    [HttpPatch("{id:guid}/folder")]
-    public async Task<IActionResult> MoveFolder(Guid id, [FromBody] MoveBoardFolderDto dto, CancellationToken ct)
+    [HttpDelete("{boardId:guid}/members/{userId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> RemoveOverride(
+        Guid boardId,
+        Guid userId,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        await _service.MoveToFolderAsync(userId, id, dto.FolderId, ct);
+        await _boards.RemoveBoardOverrideAsync(boardId, userId, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
     // ------------------------------------------------------------
-    // PATCH: move org
+    // GET MEMBERS (effective, excluding blocked)
     // ------------------------------------------------------------
-    [HttpPatch("{id:guid}/org")]
-    public async Task<IActionResult> MoveOrg(Guid id, [FromBody] MoveBoardOrgDto dto, CancellationToken ct)
+    [HttpGet("{boardId:guid}/members")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<BoardMemberDto>>>> GetMembers(
+        Guid boardId,
+        CancellationToken ct)
     {
-        var userId = CurrentUserId();
-        await _service.MoveToOrgAsync(userId, id, dto.OrgId, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+        var list = await _boards.GetMembersAsync(boardId, ct);
+        return Ok(ApiResponseDto<IEnumerable<BoardMemberDto>>.Ok(list));
+    }
+
+    // ------------------------------------------------------------
+    // GET USER ROLE (effective)
+    // ------------------------------------------------------------
+    [HttpGet("{boardId:guid}/members/{userId:guid}/role")]
+    public async Task<ActionResult<ApiResponseDto<WorkspaceRole?>>> GetUserRole(
+        Guid boardId,
+        Guid userId,
+        CancellationToken ct)
+    {
+        var role = await _boards.GetUserRoleAsync(boardId, userId, ct);
+        return Ok(ApiResponseDto<WorkspaceRole?>.Ok(role));
     }
 }

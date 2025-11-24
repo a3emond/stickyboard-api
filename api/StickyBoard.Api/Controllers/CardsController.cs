@@ -1,65 +1,80 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs;
-using StickyBoard.Api.Services;
+using StickyBoard.Core.DTOs.BoardsAndCards;
+using StickyBoard.Core.DTOs.Common;
+using StickyBoard.Core.Services.BoardsAndCards.Contracts;
 
 namespace StickyBoard.Api.Controllers;
 
 [ApiController]
-[Route("api/cards")]
 [Authorize]
+[Route("api/boards/{boardId:guid}/cards")]
 public sealed class CardsController : ControllerBase
 {
-    private readonly CardService _service;
+    private readonly ICardService _cards;
 
-    public CardsController(CardService service)
+    public CardsController(ICardService cards)
     {
-        _service = service;
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
-    {
-        var user = User.GetUserId();
-        return Ok(ApiResponseDto<CardDto>.Ok(await _service.GetAsync(user, id, ct)));
-    }
-
-    [HttpGet("tab/{tabId:guid}")]
-    public async Task<IActionResult> GetByTab(Guid tabId, CancellationToken ct)
-    {
-        var user = User.GetUserId();
-        return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(await _service.GetByTabAsync(user, tabId, ct)));
-    }
-
-    [HttpGet("section/{sectionId:guid}")]
-    public async Task<IActionResult> GetBySection(Guid sectionId, CancellationToken ct)
-    {
-        var user = User.GetUserId();
-        return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(await _service.GetBySectionAsync(user, sectionId, ct)));
+        _cards = cards;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CardCreateDto dto, CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<CardDto>>> Create(Guid boardId, [FromBody] CardCreateDto dto, CancellationToken ct)
     {
-        var user = User.GetUserId();
-        var id = await _service.CreateAsync(user, dto, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { id }));
+        var userId = User.GetUserId();
+        dto.BoardId = boardId;
+
+        var card = await _cards.CreateAsync(userId, dto, ct);
+        return Ok(ApiResponseDto<CardDto>.Ok(card));
     }
 
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CardUpdateDto dto, CancellationToken ct)
+    [HttpGet]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> GetByBoard(Guid boardId, CancellationToken ct)
     {
-        var user = User.GetUserId();
-        await _service.UpdateAsync(user, id, dto, ct);
+        var list = await _cards.GetByBoardAsync(boardId, ct);
+        return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(list));
+    }
+
+    [HttpGet("search")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<CardDto>>>> Search(Guid boardId, [FromQuery] string q, CancellationToken ct)
+    {
+        var list = await _cards.SearchAsync(boardId, q, ct);
+        return Ok(ApiResponseDto<IEnumerable<CardDto>>.Ok(list));
+    }
+
+    [HttpPut("{cardId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Update(Guid cardId, [FromBody] CardUpdateDto dto, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+
+        await _cards.UpdateAsync(cardId, userId, dto, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
     }
 
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    [HttpDelete("{cardId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Delete(Guid cardId, CancellationToken ct)
     {
-        var user = User.GetUserId();
-        await _service.DeleteAsync(user, id, ct);
+        await _cards.DeleteAsync(cardId, ct);
         return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+    }
+    
+    // CardRead endpoints
+    [HttpPost("{cardId:guid}/read")]
+    public async Task<ActionResult<ApiResponseDto<object>>> MarkRead(Guid cardId, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        await _cards.MarkAsReadAsync(cardId, userId, ct);
+
+        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+    }
+
+    [HttpGet("{cardId:guid}/read")]
+    public async Task<ActionResult<ApiResponseDto<DateTime?>>> GetLastRead(Guid cardId, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        var date = await _cards.GetLastReadAsync(cardId, userId, ct);
+
+        return Ok(ApiResponseDto<DateTime?>.Ok(date));
     }
 }

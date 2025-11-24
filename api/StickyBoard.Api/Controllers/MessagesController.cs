@@ -1,53 +1,99 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs;
-using StickyBoard.Api.Services;
+using StickyBoard.Core.DTOs.Common;
+using StickyBoard.Core.DTOs.SocialAndMessaging;
+using StickyBoard.Core.Services.SocialAndMessaging;
+using StickyBoard.Core.Services.SocialAndMessaging.Contracts;
 
 namespace StickyBoard.Api.Controllers;
 
 [ApiController]
-[Route("api/messages")]
+[Route("api/[controller]")]
 [Authorize]
 public sealed class MessagesController : ControllerBase
 {
-    private readonly MessageService _service;
-    public MessagesController(MessageService service) => _service = service;
+    private readonly IMessageService _messages;
 
-    private Guid AuthUser() => User.GetUserId();
-
-    [HttpGet]
-    public async Task<IActionResult> Inbox(CancellationToken ct)
+    public MessagesController(MessageService messages)
     {
-        var msgs = await _service.GetInboxAsync(AuthUser(), ct);
-        return Ok(ApiResponseDto<IEnumerable<MessageDto>>.Ok(msgs));
+        _messages = messages;
     }
 
-    [HttpGet("unread-count")]
-    public async Task<IActionResult> UnreadCount(CancellationToken ct)
-    {
-        var count = await _service.GetUnreadCountAsync(AuthUser(), ct);
-        return Ok(ApiResponseDto<object>.Ok(new { count }));
-    }
-
+    // ------------------------------------------------------------
+    // CREATE
+    // ------------------------------------------------------------
     [HttpPost]
-    public async Task<IActionResult> Send([FromBody] SendMessageDto dto, CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<MessageDto>>> Create(MessageCreateDto dto, CancellationToken ct)
     {
-        var id = await _service.SendAsync(AuthUser(), dto, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { id }));
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<MessageDto>.Fail("Invalid or missing token."));
+
+        var msg = await _messages.CreateAsync(userId, dto, ct);
+        return Ok(ApiResponseDto<MessageDto>.Ok(msg));
     }
 
-    [HttpPut("{id:guid}/status")]
-    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateMessageStatusDto dto, CancellationToken ct)
+    // ------------------------------------------------------------
+    // UPDATE (sender only)
+    // ------------------------------------------------------------
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<ApiResponseDto<object>>> Update(Guid id, MessageUpdateDto dto, CancellationToken ct)
     {
-        await _service.UpdateStatusAsync(AuthUser(), id, dto.Status, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+        var userId = User.GetUserId();
+        if (userId == Guid.Empty)
+            return Unauthorized(ApiResponseDto<object>.Fail("Invalid or missing token."));
+
+        var ok = await _messages.UpdateAsync(id, userId, dto, ct);
+
+        return ok
+            ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+            : NotFound(ApiResponseDto<object>.Fail("Message not found or not your message."));
     }
 
+    // ------------------------------------------------------------
+    // DELETE
+    // ------------------------------------------------------------
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
+    public async Task<ActionResult<ApiResponseDto<object>>> Delete(Guid id, CancellationToken ct)
     {
-        await _service.DeleteAsync(AuthUser(), id, ct);
-        return Ok(ApiResponseDto<object>.Ok(new { success = true }));
+        var ok = await _messages.DeleteAsync(id, ct);
+
+        return ok
+            ? Ok(ApiResponseDto<object>.Ok(new { success = true }))
+            : NotFound(ApiResponseDto<object>.Fail("Message not found."));
+    }
+
+    // ------------------------------------------------------------
+    // GET BY BOARD
+    // ------------------------------------------------------------
+    [HttpGet("board/{boardId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<MessageDto>>>> GetByBoard(Guid boardId, CancellationToken ct)
+    {
+        var list = await _messages.GetByBoardAsync(boardId, ct);
+        return Ok(ApiResponseDto<IEnumerable<MessageDto>>.Ok(list));
+    }
+
+    // ------------------------------------------------------------
+    // GET BY VIEW
+    // ------------------------------------------------------------
+    [HttpGet("view/{viewId:guid}")]
+    public async Task<ActionResult<ApiResponseDto<IEnumerable<MessageDto>>>> GetByView(Guid viewId, CancellationToken ct)
+    {
+        var list = await _messages.GetByViewAsync(viewId, ct);
+        return Ok(ApiResponseDto<IEnumerable<MessageDto>>.Ok(list));
+    }
+
+    // ------------------------------------------------------------
+    // GET BY ID
+    // ------------------------------------------------------------
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<ApiResponseDto<MessageDto>>> Get(Guid id, CancellationToken ct)
+    {
+        var msg = await _messages.GetAsync(id, ct);
+
+        return msg is not null
+            ? Ok(ApiResponseDto<MessageDto>.Ok(msg))
+            : NotFound(ApiResponseDto<MessageDto>.Fail("Message not found."));
     }
 }

@@ -1,0 +1,405 @@
+@startuml StickyBoardERD
+!theme blueprint
+
+'   LAST MODIFIED: 2025-11-09
+
+' -------------------------------------------------------------
+'   CORE ENTITIES
+' -------------------------------------------------------------
+
+entity "users" as users {
+  *id : uuid <<PK>>
+  --
+  email : text
+  display_name : text
+  avatar_uri : text
+  prefs : jsonb
+  groups : text[]
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "auth_users" as auth_users {
+  *user_id : uuid <<PK, FK>>
+  --
+  password_hash : text
+  role : user_role
+  last_login : timestamptz
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "refresh_tokens" as refresh_tokens {
+  *token_hash : text <<PK>>
+  --
+  user_id : uuid <<FK>>
+  client_id : text
+  user_agent : text
+  ip_addr : inet
+  issued_at : timestamptz
+  expires_at : timestamptz
+  revoked : boolean
+  revoked_at : timestamptz
+  replaced_by : text
+}
+
+entity "user_contacts" as user_contacts {
+  *user_id : uuid <<PK, FK>>
+  *contact_id : uuid <<PK, FK>>
+  --
+  status : text
+  created_at : timestamptz
+  accepted_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   WORKSPACES / BOARDS / MEMBERSHIPS
+' -------------------------------------------------------------
+
+entity "workspaces" as workspaces {
+  *id : uuid <<PK>>
+  --
+  name : text
+  created_by : uuid <<FK users.id>>
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "workspace_members" as workspace_members {
+  *workspace_id : uuid <<PK, FK>>
+  *user_id : uuid <<PK, FK>>
+  --
+  role : workspace_role
+  joined_at : timestamptz
+}
+
+entity "boards" as boards {
+  *id : uuid <<PK>>
+  --
+  workspace_id : uuid <<FK>>
+  title : text
+  theme : jsonb
+  meta : jsonb
+  created_by : uuid <<FK users.id>>
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "board_members" as board_members {
+  *board_id : uuid <<PK, FK>>
+  *user_id : uuid <<PK, FK>>
+  --
+  role : workspace_role
+}
+
+entity "views" as views {
+  *id : uuid <<PK>>
+  --
+  board_id : uuid <<FK>>
+  title : text
+  type : view_type
+  layout : jsonb
+  position : int
+  version : int
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   CARDS / COMMENTS
+' -------------------------------------------------------------
+
+entity "cards" as cards {
+  *id : uuid <<PK>>
+  --
+  board_id : uuid <<FK>>
+  title : text
+  markdown : text
+  ink_data : jsonb
+  due_date : timestamptz
+  start_date : timestamptz
+  end_date : timestamptz
+  checklist : jsonb
+  priority : int
+  status : card_status
+  tags : text[]
+  assignee : uuid <<FK users.id>>
+  created_by : uuid <<FK users.id>>
+  last_edited_by : uuid <<FK users.id>>
+  version : int
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "card_reads" as card_reads {
+  *card_id : uuid <<PK, FK>>
+  *user_id : uuid <<PK, FK>>
+  --
+  last_seen_at : timestamptz
+}
+
+entity "card_comments" as card_comments {
+  *id : uuid <<PK>>
+  --
+  card_id : uuid <<FK>>
+  parent_id : uuid <<FK>>
+  user_id : uuid <<FK users.id>>
+  content : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   MESSAGES (BOARD/VIEW CHAT) + INBOX
+' -------------------------------------------------------------
+
+entity "messages" as messages {
+  *id : uuid <<PK>>
+  --
+  channel : message_channel
+  board_id : uuid <<FK>>
+  view_id : uuid <<FK>>
+  sender_id : uuid <<FK users.id>>
+  content : text
+  parent_id : uuid <<FK>>
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "inbox_messages" as inbox_messages {
+  *id : uuid <<PK>>
+  --
+  sender_id : uuid <<FK users.id>>
+  receiver_id : uuid <<FK users.id>>
+  content : text
+  created_at : timestamptz
+  read_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   MENTIONS / NOTIFICATIONS
+' -------------------------------------------------------------
+
+entity "mentions" as mentions {
+  *id : uuid <<PK>>
+  --
+  entity_type : text
+  entity_id : uuid
+  mentioned_user : uuid <<FK users.id>>
+  author_id : uuid <<FK users.id>>
+  created_at : timestamptz
+}
+
+entity "notifications" as notifications {
+  *id : uuid <<PK>>
+  --
+  user_id : uuid <<FK users.id>>
+  type : notification_type
+  entity_id : uuid
+  read : boolean
+  created_at : timestamptz
+  read_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   ATTACHMENTS / CDN TOKENS
+' -------------------------------------------------------------
+
+entity "attachments" as attachments {
+  *id : uuid <<PK>>
+  --
+  workspace_id : uuid <<FK>>
+  board_id : uuid <<FK>>
+  card_id : uuid <<FK>>
+  filename : text
+  mime : text
+  byte_size : bigint
+  checksum_sha256 : bytea
+  storage_path : text
+  is_public : boolean
+  status : text
+  meta : jsonb
+  uploaded_by : uuid <<FK users.id>>
+  version : int
+  created_at : timestamptz
+  updated_at : timestamptz
+  deleted_at : timestamptz
+}
+
+entity "attachment_variants" as attachment_variants {
+  *id : uuid <<PK>>
+  --
+  parent_id : uuid <<FK attachments.id>>
+  variant : text
+  mime : text
+  byte_size : bigint
+  width : int
+  height : int
+  duration_ms : int
+  storage_path : text
+  status : text
+  checksum_sha256 : bytea
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "file_tokens" as file_tokens {
+  *id : uuid <<PK>>
+  --
+  attachment_id : uuid <<FK>>
+  variant : text
+  secret : bytea
+  audience : text
+  expires_at : timestamptz
+  created_by : uuid <<FK users.id>>
+  revoked : boolean
+  created_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   INVITES
+' -------------------------------------------------------------
+
+entity "invites" as invites {
+  *id : uuid <<PK>>
+  --
+  sender_id : uuid <<FK users.id>>
+  email : text
+  workspace_id : uuid <<FK>>
+  board_id : uuid <<FK>>
+  target_role : workspace_role
+  board_role : workspace_role
+  token_hash : text
+  status : invite_status
+  accepted_by : uuid <<FK users.id>>
+  accepted_at : timestamptz
+  revoked_at : timestamptz
+  created_at : timestamptz
+  expires_at : timestamptz
+  note : text
+}
+
+' -------------------------------------------------------------
+'   SYNC / OUTBOX / WORKER
+' -------------------------------------------------------------
+
+entity "event_outbox" as event_outbox {
+  *cursor : bigserial <<PK>>
+  --
+  topic : text
+  entity_id : uuid
+  workspace_id : uuid
+  board_id : uuid
+  op : text
+  payload : jsonb
+  created_at : timestamptz
+}
+
+entity "sync_cursors" as sync_cursors {
+  *user_id : uuid <<PK, FK>>
+  *scope_type : text <<PK>>
+  *scope_id : uuid <<PK>>
+  --
+  last_cursor : bigint
+  updated_at : timestamptz
+}
+
+entity "worker_jobs" as worker_jobs {
+  *id : bigserial <<PK>>
+  --
+  kind : text
+  payload : jsonb
+  status : text
+  attempts : int
+  created_at : timestamptz
+  updated_at : timestamptz
+  available_at : timestamptz
+  last_error : text
+}
+
+entity "worker_job_attempts" as worker_job_attempts {
+  *id : bigserial <<PK>>
+  --
+  job_id : bigint <<FK worker_jobs.id>>
+  started_at : timestamptz
+  finished_at : timestamptz
+  error : text
+}
+
+entity "push_tokens" as push_tokens {
+  *id : bigserial <<PK>>
+  --
+  user_id : uuid <<FK users.id>>
+  provider : text
+  token : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "ws_sessions" as ws_sessions {
+  *id : bigserial <<PK>>
+  --
+  user_id : uuid <<FK users.id>>
+  node_id : text
+  connected_at : timestamptz
+  last_seen_at : timestamptz
+}
+
+' -------------------------------------------------------------
+'   RELATIONSHIPS
+' -------------------------------------------------------------
+
+users ||--o{ auth_users
+users ||--o{ refresh_tokens
+users ||--o{ user_contacts : contact
+users ||--o{ workspace_members
+users ||--o{ board_members
+users ||--o{ cards : created_by
+users ||--o{ cards : assignee
+users ||--o{ card_comments
+users ||--o{ messages : sender
+users ||--o{ inbox_messages : sender
+users ||--o{ inbox_messages : receiver
+users ||--o{ mentions : mentioned_user
+users ||--o{ notifications
+users ||--o{ attachments : uploaded_by
+users ||--o{ invites : sender
+users ||--o{ invites : accepted_by
+users ||--o{ sync_cursors
+users ||--o{ push_tokens
+users ||--o{ ws_sessions
+
+workspaces ||--o{ workspace_members
+workspaces ||--o{ boards
+workspaces ||--o{ attachments
+
+boards ||--o{ board_members
+boards ||--o{ views
+boards ||--o{ cards
+boards ||--o{ attachments
+boards ||--o{ messages
+
+views ||--o{ messages
+views ||--o{ cards
+
+cards ||--o{ card_reads
+cards ||--o{ card_comments
+cards ||--o{ attachments
+cards ||--o{ mentions
+
+card_comments ||--o{ card_comments : parent
+
+attachments ||--o{ attachment_variants
+attachments ||--o{ file_tokens
+
+worker_jobs ||--o{ worker_job_attempts
+
+@enduml

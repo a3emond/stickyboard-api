@@ -1,0 +1,34 @@
+@startuml comments_reads
+!theme blueprint
+
+entity cards {
+  *id : uuid
+}
+
+entity users {
+  *id : uuid
+}
+
+entity card_comments {
+  *id : uuid
+  --
+  card_id : uuid
+  parent_id : uuid
+  user_id : uuid
+  content : text
+}
+
+entity card_reads {
+  *card_id : uuid
+  *user_id : uuid
+  --
+  last_seen_at : timestamptz
+}
+
+cards ||--o{ card_comments
+card_comments ||--o{ card_comments : replies
+cards ||--o{ card_reads
+users ||--o{ card_reads
+users ||--o{ card_comments
+
+@enduml
