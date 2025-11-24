@@ -4,14 +4,14 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Npgsql;
-using StickyBoard.Api.Auth;
+using StickyBoard.Api.Common;
 using StickyBoard.Api.Common.Filters;
 using StickyBoard.Api.Middleware;
-using StickyBoard.Api.Models;
-using StickyBoard.Api.Repositories.SocialAndMessaging;
-using StickyBoard.Api.Repositories.UsersAndAuth;
-using StickyBoard.Api.Services.UsersAndAuth;
+using StickyBoard.Core.Auth;
+using StickyBoard.Core.Infrastructure.Db;
+using StickyBoard.Core.Repositories.SocialAndMessaging;
+using StickyBoard.Core.Repositories.UsersAndAuth;
+using StickyBoard.Core.Services.UsersAndAuth;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -19,60 +19,10 @@ var configuration = builder.Configuration;
 // ==========================================================
 // 1. DATABASE CONNECTION (NpgsqlDataSource with Enum Mapping)
 // ==========================================================
-var dbHost = configuration["DB_HOST"] ?? "localhost";
-var dbUser = configuration["POSTGRES_USER"];
-var dbPass = configuration["POSTGRES_PASSWORD"];
-var dbName = configuration["POSTGRES_DB"];
 
-string connectionString;
+var connectionString = ConnectionStringBuilder.Build(configuration);
+var dataSource       = DataSourceFactory.Create(connectionString);
 
-var dbUrl = configuration["DATABASE_URL"];
-if (!string.IsNullOrEmpty(dbUrl) && dbUrl.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
-{
-    var uri = new Uri(dbUrl);
-    var userInfo = uri.UserInfo.Split(':');
-    var user = userInfo.Length > 0 ? userInfo[0] : string.Empty;
-    var pass = userInfo.Length > 1 ? userInfo[1] : string.Empty;
-    var host = uri.Host;
-    var port = uri.Port > 0 ? uri.Port : 5432;
-    var database = uri.AbsolutePath.TrimStart('/');
-
-    connectionString = $"Host={host};Port={port};Database={database};Username={user};Password={pass};SSL Mode=Prefer;Trust Server Certificate=true";
-}
-else
-{
-    connectionString = $"Host={dbHost};Database={dbName};Username={dbUser};Password={dbPass};SSL Mode=Prefer;Trust Server Certificate=true";
-}
-
-var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-
-dataSourceBuilder.MapEnum<UserRole>("user_role");
-dataSourceBuilder.MapEnum<WorkspaceRole>("workspace_role");
-dataSourceBuilder.MapEnum<ViewType>("view_type");
-dataSourceBuilder.MapEnum<CardStatus>("card_status");
-dataSourceBuilder.MapEnum<MessageChannel>("message_channel");
-dataSourceBuilder.MapEnum<NotificationType>("notification_type");
-dataSourceBuilder.MapEnum<InviteStatus>("invite_status");
-dataSourceBuilder.MapEnum<InviteScope>("invite_scope");
-dataSourceBuilder.MapEnum<ContactStatus>("contact_status");
-dataSourceBuilder.MapEnum<EntityType>("entity_type");
-
-dataSourceBuilder.MapEnum<WorkerJobKind>("worker_job_kind");
-dataSourceBuilder.MapEnum<WorkerJobStatus>("worker_job_status");
-dataSourceBuilder.MapEnum<PushProvider>("push_provider");
-dataSourceBuilder.MapEnum<NotificationChannel>("notification_channel");
-dataSourceBuilder.MapEnum<SyncScopeType>("sync_scope_type");
-dataSourceBuilder.MapEnum<AttachmentStatus>("attachment_status");
-dataSourceBuilder.MapEnum<AttachmentVariantType>("attachment_variant_type");
-dataSourceBuilder.MapEnum<OutboxTopic>("outbox_topic");
-dataSourceBuilder.MapEnum<OutboxOperation>("outbox_operation");
-dataSourceBuilder.MapEnum<FileTokenAudience>("file_token_audience");
-
-
-
-
-
-var dataSource = dataSourceBuilder.Build();
 builder.Services.AddSingleton(dataSource);
 builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 

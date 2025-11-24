@@ -1,9 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StickyBoard.Api.Common;
-using StickyBoard.Api.DTOs.Common;
-using StickyBoard.Api.DTOs.SocialAndMessaging;
-using StickyBoard.Api.Services.SocialAndMessaging.Contracts;
+using StickyBoard.Core.DTOs.Common;
+using StickyBoard.Core.DTOs.SocialAndMessaging;
+using StickyBoard.Core.Services.SocialAndMessaging.Contracts;
 
 namespace StickyBoard.Api.Controllers;
 

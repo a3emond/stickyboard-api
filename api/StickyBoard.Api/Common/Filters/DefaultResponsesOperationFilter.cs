@@ -1,6 +1,6 @@
 ﻿using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
-using StickyBoard.Api.DTOs.Common;
+using StickyBoard.Core.DTOs.Common;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace StickyBoard.Api.Common.Filters
