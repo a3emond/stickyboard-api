@@ -24,10 +24,10 @@ public sealed class WorkerQueueService
     };
 
     private readonly IWorkerJobAttemptRepository _attempts;
-    private readonly IWorkerQueueRepository _jobs;
+    private readonly IWorkerJobRepository _jobs;
 
     public WorkerQueueService(
-        IWorkerQueueRepository jobs,
+        IWorkerJobRepository jobs,
         IWorkerJobAttemptRepository attempts)
     {
         _jobs = jobs;

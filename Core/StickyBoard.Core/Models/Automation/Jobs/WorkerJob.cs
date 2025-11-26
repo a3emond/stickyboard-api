@@ -27,17 +27,3 @@ public class WorkerJob : IEntityUpdatable
 
     [Column("updated_at")] public DateTime UpdatedAt { get; set; }
 }
-/*
-CREATE TABLE IF NOT EXISTS worker_jobs (
-  id           bigserial PRIMARY KEY,
-  kind         worker_job_kind   NOT NULL,
-  payload      jsonb             NOT NULL,
-  status       worker_job_status NOT NULL DEFAULT 'queued',
-  priority     int               NOT NULL DEFAULT 5,
-  attempts     int               NOT NULL DEFAULT 0,
-  created_at   timestamptz       NOT NULL DEFAULT now(),
-  updated_at   timestamptz       NOT NULL DEFAULT now(),
-  available_at timestamptz       NOT NULL DEFAULT now(),
-  last_error   text
-);
-*/

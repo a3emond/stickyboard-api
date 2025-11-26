@@ -5,11 +5,11 @@ using StickyBoard.Core.Models.Automation.Jobs;
 
 namespace StickyBoard.Core.Repositories.Automation.Jobs;
 
-public sealed class WorkerQueueRepository : IWorkerQueueRepository
+public sealed class WorkerJobRepository : IWorkerJobRepository
 {
     private readonly NpgsqlDataSource _db;
 
-    public WorkerQueueRepository(NpgsqlDataSource db)
+    public WorkerJobRepository(NpgsqlDataSource db)
     {
         _db = db;
     }

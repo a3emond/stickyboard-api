@@ -2,7 +2,7 @@
 
 namespace StickyBoard.Core.Repositories.Automation.Jobs;
 
-public interface IWorkerQueueRepository
+public interface IWorkerJobRepository
 {
     Task<long> InsertAsync(WorkerJob job, CancellationToken ct);
 

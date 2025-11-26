@@ -21,15 +21,3 @@ public class EventOutbox
 
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 }
-/*
-CREATE TABLE IF NOT EXISTS event_outbox (
-  cursor       BIGSERIAL PRIMARY KEY,
-  topic        outbox_topic NOT NULL,
-  entity_id    uuid NOT NULL,
-  workspace_id uuid,
-  board_id     uuid,
-  op           outbox_operation NOT NULL,
-  payload      jsonb NOT NULL,
-  created_at   timestamptz NOT NULL DEFAULT now()
-);
-*/
