@@ -5,10 +5,11 @@ using StickyBoard.Core.DTOs.UsersAndAuth;
 using StickyBoard.Core.Models;
 using StickyBoard.Core.Repositories.Base;
 using StickyBoard.Core.Repositories.UsersAndAuth.Contracts;
+using StickyBoard.Core.Services.UsersAndAuth.Contracts;
 
 namespace StickyBoard.Core.Services.UsersAndAuth;
 
-public sealed class UserService
+public sealed class UserService : IUserService
 {
     private readonly IAuthUserRepository _authUsers;
     private readonly IPasswordHasher _hasher;

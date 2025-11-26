@@ -9,9 +9,23 @@ using StickyBoard.Api.Common.Filters;
 using StickyBoard.Api.Middleware;
 using StickyBoard.Core.Auth;
 using StickyBoard.Core.Infrastructure.Db;
+using StickyBoard.Core.Repositories.Attachments;
+using StickyBoard.Core.Repositories.Attachments.Contracts;
+using StickyBoard.Core.Repositories.Automation.Jobs;
+using StickyBoard.Core.Repositories.BoardsAndCards;
+using StickyBoard.Core.Repositories.BoardsAndCards.Contracts;
 using StickyBoard.Core.Repositories.SocialAndMessaging;
+using StickyBoard.Core.Repositories.SocialAndMessaging.Contracts;
 using StickyBoard.Core.Repositories.UsersAndAuth;
+using StickyBoard.Core.Repositories.UsersAndAuth.Contracts;
+using StickyBoard.Core.Services.Attachments;
+using StickyBoard.Core.Services.Automation.Workers;
+using StickyBoard.Core.Services.BoardsAndCards;
+using StickyBoard.Core.Services.BoardsAndCards.Contracts;
+using StickyBoard.Core.Services.SocialAndMessaging;
+using StickyBoard.Core.Services.SocialAndMessaging.Contracts;
 using StickyBoard.Core.Services.UsersAndAuth;
+using StickyBoard.Core.Services.UsersAndAuth.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -29,32 +43,68 @@ builder.Services.AddScoped<IDbConnection>(_ => dataSource.CreateConnection());
 // ==========================================================
 // 2. REPOSITORIES & SERVICES
 // ==========================================================
+builder.Services.AddHttpClient(); // TODO: verify if added properly
 // ----------------------------------------------------------
-// Core Auth / Users
+// Attachments
 // ----------------------------------------------------------
-builder.Services.AddScoped<AuthService>();
-builder.Services.AddScoped<UserService>();
-builder.Services.AddScoped<AuthUserRepository>();
-builder.Services.AddScoped<UserRepository>();
-builder.Services.AddScoped<RefreshTokenRepository>();
+builder.Services.AddScoped<IAttachmentManager, AttachmentManager>();
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+builder.Services.AddScoped<IAttachmentVariantRepository, AttachmentVariantRepository>();
+builder.Services.AddScoped<IFileTokenRepository, FileTokenRepository>();
+
+// ----------------------------------------------------------
+// Automation / Workers
+// ----------------------------------------------------------
+builder.Services.AddScoped<WorkerQueueService>();
+builder.Services.AddScoped<IWorkerJobRepository, WorkerJobRepository>();
+builder.Services.AddScoped<IWorkerJobAttemptRepository, WorkerJobAttemptRepository>();
+
+// ----------------------------------------------------------
+// Boards & Cards
+// ----------------------------------------------------------
+builder.Services.AddScoped<IBoardService, BoardService>();
+builder.Services.AddScoped<ICardService, CardService>();
+builder.Services.AddScoped<IViewService, ViewService>();
+builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
+
+builder.Services.AddScoped<IBoardRepository, BoardRepository>();
+builder.Services.AddScoped<IBoardMemberRepository, BoardMemberRepository>();
+builder.Services.AddScoped<ICardRepository, CardRepository>();
+builder.Services.AddScoped<ICardReadRepository, CardReadRepository>();
+builder.Services.AddScoped<IViewRepository, ViewRepository>();
+builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+builder.Services.AddScoped<IWorkspaceMemberRepository, WorkspaceMemberRepository>();
+
+// ----------------------------------------------------------
+// Social & Messaging
+// ----------------------------------------------------------
+builder.Services.AddScoped<ICardCommentService, CardCommentService>();
+builder.Services.AddScoped<IContactService, ContactService>();
+builder.Services.AddScoped<IInboxMessageService, InboxMessageService>();
+builder.Services.AddScoped<IInviteService, InviteService>();
+builder.Services.AddScoped<IMentionService, MentionService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+builder.Services.AddScoped<ICardCommentRepository, CardCommentRepository>();
+builder.Services.AddScoped<IContactRepository, ContactRepository>();
+builder.Services.AddScoped<IInboxMessageRepository, InboxMessageRepository>();
+builder.Services.AddScoped<IInviteRepository, InviteRepository>();
+builder.Services.AddScoped<IMentionRepository, MentionRepository>();
+builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+
+// ----------------------------------------------------------
+// Users & Auth (interfaces + implementations)
+// ----------------------------------------------------------
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAuthUserRepository, AuthUserRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
-// ----------------------------------------------------------
-// Boards / Cards
-// ----------------------------------------------------------
-
-
-// ----------------------------------------------------------
-// Card Comments & Board Chat Messages
-// ----------------------------------------------------------
-
-
-// ----------------------------------------------------------
-// Messaging / Invites / User Relations
-// ----------------------------------------------------------
-
-builder.Services.AddScoped<InviteRepository>();
 
 
 // ==========================================================
@@ -151,7 +201,9 @@ builder.Services.AddSwaggerGen(options =>
     });
 
     options.OperationFilter<DefaultResponsesOperationFilter>();
-    options.OperationFilter<StickyBoard.Api.Common.Filters.ForceJsonContentTypeFilter>();
+    options.OperationFilter<ForceJsonContentTypeFilter>();
+    options.OperationFilter<FileUploadOperationFilter>();
+
 });
 
 // ==========================================================

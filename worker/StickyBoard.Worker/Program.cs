@@ -5,9 +5,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StickyBoard.Core.Infrastructure.Db;
+using StickyBoard.Core.Repositories.Attachments;
+using StickyBoard.Core.Repositories.Attachments.Contracts;
 using StickyBoard.Core.Repositories.Automation.Jobs;
+using StickyBoard.Core.Services.Attachments;
 using StickyBoard.Core.Services.Automation.Workers;
 using StickyBoard.Worker;
+using StickyBoard.Worker.Workers;
 
 // ==========================================================
 //  StickyBoard Worker Entry Point 
@@ -53,7 +57,18 @@ await Host.CreateDefaultBuilder(args)
         services.AddScoped<IWorkerJobAttemptRepository, WorkerJobAttemptRepository>();
         services.AddScoped<WorkerQueueService>();
 
+        services.AddScoped<IAttachmentManager, AttachmentManager>();
+        services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+        services.AddScoped<IAttachmentVariantRepository, AttachmentVariantRepository>();
+        services.AddScoped<IFileTokenRepository, FileTokenRepository>();
+
+        services.AddScoped<IWorkerHandler, AssetVariantWorker>();
+        services.AddScoped<WorkerDispatcher>();
+
+        services.AddHttpClient();
+
         services.AddHostedService<WorkerLoop>();
+
 
     })
     .ConfigureLogging(logging =>

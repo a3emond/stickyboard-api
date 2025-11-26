@@ -49,17 +49,17 @@ public sealed class AttachmentVariantRepository
 
     public override async Task<bool> UpdateAsync(AttachmentVariant e, CancellationToken ct)
     {
-        const string sql = @"
+        var sql = $@"
             UPDATE attachment_variants SET
-                mime         = @mm,
-                byte_size    = @bs,
-                width        = @w,
-                height       = @h,
-                duration_ms  = @dur,
-                storage_path = @sp,
-                status       = @st,
+                mime           = @mm,
+                byte_size      = @bs,
+                width          = @w,
+                height         = @h,
+                duration_ms    = @dur,
+                storage_path   = @sp,
+                status         = @st,
                 checksum_sha256 = @cs
-             WHERE id = @id;
+            WHERE {ConcurrencyWhere(e)};
         ";
 
         await using var conn = await Conn(ct);
@@ -73,7 +73,9 @@ public sealed class AttachmentVariantRepository
         cmd.Parameters.AddWithValue("sp", e.StoragePath);
         cmd.Parameters.AddWithValue("st", e.Status);
         cmd.Parameters.AddWithValue("cs", (object?)e.ChecksumSha256 ?? DBNull.Value);
+
         cmd.Parameters.AddWithValue("id", e.Id);
+        BindConcurrencyParameters(cmd, e);
 
         return await cmd.ExecuteNonQueryAsync(ct) > 0;
     }

@@ -4,7 +4,7 @@ using StickyBoard.Core.Models.Base;
 namespace StickyBoard.Core.Models.Attachments;
 
 [Table("attachment_variants")]
-public sealed class AttachmentVariant : IEntityUpdatable
+public sealed class AttachmentVariant : IVersionedEntity
 {
     [Column("id")] public Guid Id { get; set; }
 
@@ -31,4 +31,7 @@ public sealed class AttachmentVariant : IEntityUpdatable
     [Column("created_at")] public DateTime CreatedAt { get; set; }
 
     [Column("updated_at")] public DateTime UpdatedAt { get; set; }
+    
+    [Column("version")] public int Version { get; set; }
+
 }

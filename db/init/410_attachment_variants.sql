@@ -17,7 +17,8 @@ CREATE TABLE attachment_variants (
   checksum_sha256 bytea,
 
   created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now()
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  version         int NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX ux_variant_unique
@@ -28,6 +29,10 @@ CREATE INDEX ix_variant_parent
 
 -- Safety: disable triggers on attachment_variants (if someone adds one accidentally)
 ALTER TABLE attachment_variants DISABLE TRIGGER ALL;
+
+CREATE TRIGGER trg_attach_version
+    BEFORE UPDATE ON attachment_variants
+    FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 --------------------------------------------------
 -- Prevent variants for FAILED attachments

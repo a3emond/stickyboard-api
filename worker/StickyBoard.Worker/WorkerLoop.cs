@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StickyBoard.Core.Models;
 using StickyBoard.Core.Models.Automation.Jobs;
 using StickyBoard.Core.Services.Automation.Workers;
+using StickyBoard.Worker.Workers;
 
 namespace StickyBoard.Worker;
 
@@ -28,7 +28,9 @@ public sealed class WorkerLoop : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
+
             var queue = scope.ServiceProvider.GetRequiredService<WorkerQueueService>();
+            var dispatcher = scope.ServiceProvider.GetRequiredService<WorkerDispatcher>();
 
             try
             {
@@ -40,7 +42,7 @@ public sealed class WorkerLoop : BackgroundService
                     continue;
                 }
 
-                _logger.LogInformation($"Job {job.Id} started");
+                _logger.LogInformation("Job {JobId} started", job.Id);
 
                 using var timeoutCts =
                     CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -50,25 +52,25 @@ public sealed class WorkerLoop : BackgroundService
                 using var heartbeat =
                     new PeriodicTimer(HeartbeatGap);
 
-                var heartbeatTask = Task.Run(async () =>
+                _ = Task.Run(async () =>
                 {
                     while (await heartbeat.WaitForNextTickAsync(timeoutCts.Token))
                     {
                         await queue.HeartbeatAsync(job.Id, timeoutCts.Token);
-                        _logger.LogDebug($"Heartbeat for job {job.Id}");
+                        _logger.LogDebug("Heartbeat for job {JobId}", job.Id);
                     }
                 }, timeoutCts.Token);
 
                 try
                 {
-                    await ProcessAsync(job, timeoutCts.Token);
+                    await dispatcher.DispatchAsync(job, timeoutCts.Token);
 
                     await queue.CompleteAsync(job.Id, timeoutCts.Token);
-                    _logger.LogInformation($"Job {job.Id} completed");
+                    _logger.LogInformation("Job {JobId} completed", job.Id);
                 }
                 catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
                 {
-                    _logger.LogError($"Job {job.Id} timed out");
+                    _logger.LogError("Job {JobId} timed out", job.Id);
 
                     await queue.RetryAsync(
                         job.Id,
@@ -79,7 +81,7 @@ public sealed class WorkerLoop : BackgroundService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Job {job.Id} failed");
+                    _logger.LogError(ex, "Job {JobId} failed", job.Id);
 
                     if (job.Attempts >= 5)
                         await queue.FailAsync(job.Id, ex.Message, stoppingToken);
@@ -99,7 +101,6 @@ public sealed class WorkerLoop : BackgroundService
             }
             catch (OperationCanceledException)
             {
-                // normal shutdown
             }
             catch (Exception ex)
             {
@@ -109,21 +110,5 @@ public sealed class WorkerLoop : BackgroundService
         }
 
         _logger.LogInformation("Worker stopped.");
-    }
-
-    private static Task ProcessAsync(WorkerJob job, CancellationToken ct)
-    {
-        return job.Kind switch
-        {
-            WorkerJobKind.NotificationPush     => Task.CompletedTask,
-            WorkerJobKind.MentionNotify        => Task.CompletedTask,
-            WorkerJobKind.AssetVariant         => Task.CompletedTask,
-            WorkerJobKind.InviteEmail          => Task.CompletedTask,
-            WorkerJobKind.SearchIndex          => Task.CompletedTask,
-            WorkerJobKind.AnalyticsAggregate   => Task.CompletedTask,
-            WorkerJobKind.Cleanup              => Task.CompletedTask,
-            WorkerJobKind.CdnGarbageCollect    => Task.CompletedTask,
-            _ => throw new InvalidOperationException($"Unhandled job type: {job.Kind}")
-        };
     }
 }

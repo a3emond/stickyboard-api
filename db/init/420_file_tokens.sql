@@ -5,7 +5,7 @@ CREATE TABLE file_tokens (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   attachment_id uuid NOT NULL REFERENCES attachments(id) ON DELETE CASCADE,
   variant        attachment_variant_type DEFAULT NULL,
-  secret         bytea,
+  secret         bytea NOT NULL,
   audience       file_token_audience NOT NULL DEFAULT 'download',
   expires_at     timestamptz NOT NULL,
   created_by     uuid REFERENCES users(id) ON DELETE SET NULL,
