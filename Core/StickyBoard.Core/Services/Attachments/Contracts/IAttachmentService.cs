@@ -12,4 +12,11 @@ public interface IAttachmentService
     Task<IEnumerable<AttachmentDto>> GetForBoardAsync(Guid boardId, CancellationToken ct);
     Task<IEnumerable<AttachmentDto>> GetForWorkspaceAsync(Guid workspaceId, CancellationToken ct);
     Task<AttachmentDto?> GetAsync(Guid id, CancellationToken ct);
+
+    // CDN flow
+    Task<string> GenerateUploadUrlAsync(Guid attachmentId, CancellationToken ct);
+    Task<string> GenerateDownloadUrlAsync(Guid attachmentId, string? variant, CancellationToken ct);
+
+    Task FailAsync(Guid id, CancellationToken ct);
+    Task<AttachmentDto> MarkReadyAsync(Guid id, CancellationToken ct);
 }

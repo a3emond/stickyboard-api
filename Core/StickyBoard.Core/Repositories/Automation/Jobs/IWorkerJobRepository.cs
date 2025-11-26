@@ -17,4 +17,5 @@ public interface IWorkerJobRepository
     Task IncrementAttemptsAsync(long jobId, string? error, CancellationToken ct);
 
     Task RescheduleAsync(long jobId, DateTime nextAttemptAt, CancellationToken ct);
+    Task TouchAsync(long jobId, CancellationToken ct);
 }

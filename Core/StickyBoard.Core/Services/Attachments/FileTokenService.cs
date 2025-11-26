@@ -1,5 +1,4 @@
-﻿using System.Security.Cryptography;
-using StickyBoard.Core.DTOs.Attachments;
+﻿using StickyBoard.Core.DTOs.Attachments;
 using StickyBoard.Core.Models.Attachments;
 using StickyBoard.Core.Repositories.Attachments.Contracts;
 using StickyBoard.Core.Services.Attachments.Contracts;
@@ -15,22 +14,20 @@ public sealed class FileTokenService : IFileTokenService
         _tokens = tokens;
     }
 
+    // ------------------------------------------------------------
+    // CREATE (DB only)
+    // ------------------------------------------------------------
     public async Task<FileTokenDto> CreateAsync(Guid userId, FileTokenCreateDto dto, CancellationToken ct)
     {
-        var secret = new byte[32];
-        RandomNumberGenerator.Fill(secret);
-
-        var expires = dto.ExpiresAt ?? DateTime.UtcNow.AddHours(1);
-
         var e = new FileToken
         {
             AttachmentId = dto.AttachmentId,
-            Variant = dto.Variant,
-            Secret = secret,
-            Audience = dto.Audience,
-            ExpiresAt = expires,
-            CreatedBy = userId,
-            Revoked = false
+            Variant       = dto.Variant,
+            Secret        = null,         // No secrets stored here anymore
+            Audience      = dto.Audience,
+            ExpiresAt     = dto.ExpiresAt ?? DateTime.UtcNow.AddHours(1),
+            CreatedBy     = userId,
+            Revoked       = false
         };
 
         var id = await _tokens.CreateAsync(e, ct);
@@ -39,34 +36,45 @@ public sealed class FileTokenService : IFileTokenService
         return Map(created!);
     }
 
-    public async Task<IEnumerable<FileTokenDto>> GetValidForAttachmentAsync(Guid attachmentId, CancellationToken ct)
+    // ------------------------------------------------------------
+    // READ
+    // ------------------------------------------------------------
+    public async Task<IEnumerable<FileTokenDto>> GetValidForAttachmentAsync(
+        Guid attachmentId,
+        CancellationToken ct)
     {
-        var list = await _tokens.GetValidForAttachmentAsync(attachmentId, DateTime.UtcNow, ct);
+        var list = await _tokens.GetValidForAttachmentAsync(
+            attachmentId,
+            DateTime.UtcNow,
+            ct);
+
         return list.Select(Map);
     }
 
+    // ------------------------------------------------------------
+    // REVOKE
+    // ------------------------------------------------------------
     public Task<bool> RevokeAsync(Guid id, CancellationToken ct)
-    {
-        return _tokens.RevokeAsync(id, ct);
-    }
+        => _tokens.RevokeAsync(id, ct);
 
     public Task<int> RevokeAllForAttachmentAsync(Guid attachmentId, CancellationToken ct)
-    {
-        return _tokens.RevokeAllForAttachmentAsync(attachmentId, ct);
-    }
+        => _tokens.RevokeAllForAttachmentAsync(attachmentId, ct);
 
+    // ------------------------------------------------------------
+    // MAP
+    // ------------------------------------------------------------
     private static FileTokenDto Map(FileToken t)
     {
         return new FileTokenDto
         {
-            Id = t.Id,
+            Id           = t.Id,
             AttachmentId = t.AttachmentId,
-            Variant = t.Variant,
-            Audience = t.Audience,
-            ExpiresAt = t.ExpiresAt,
-            CreatedBy = t.CreatedBy,
-            Revoked = t.Revoked,
-            CreatedAt = t.CreatedAt
+            Variant      = t.Variant,
+            Audience     = t.Audience,
+            ExpiresAt    = t.ExpiresAt,
+            CreatedBy    = t.CreatedBy,
+            Revoked      = t.Revoked,
+            CreatedAt    = t.CreatedAt
         };
     }
 }

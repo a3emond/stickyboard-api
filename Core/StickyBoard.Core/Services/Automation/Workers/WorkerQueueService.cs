@@ -102,4 +102,10 @@ public sealed class WorkerQueueService
         await _jobs.IncrementAttemptsAsync(jobId, error, ct);
         await _jobs.RescheduleAsync(jobId, DateTime.UtcNow.AddSeconds(delaySeconds), ct);
     }
+
+    public async Task HeartbeatAsync(long jobId, CancellationToken ct)
+    {
+        await _jobs.TouchAsync(jobId, ct);
+    }
+
 }

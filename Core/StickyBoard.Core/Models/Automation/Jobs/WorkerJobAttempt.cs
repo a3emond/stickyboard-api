@@ -16,13 +16,3 @@ public class WorkerJobAttempt : IEntity
 
     [Column("error")] public string? Error { get; set; }
 }
-
-/*
-CREATE TABLE IF NOT EXISTS worker_job_attempts (
-  id          bigserial PRIMARY KEY,
-  job_id      bigint NOT NULL REFERENCES worker_jobs(id) ON DELETE CASCADE,
-  started_at  timestamptz NOT NULL,
-  finished_at timestamptz,
-  error       text
-);
-*/

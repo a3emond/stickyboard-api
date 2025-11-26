@@ -5,9 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StickyBoard.Core.Infrastructure.Db;
+using StickyBoard.Core.Repositories.Automation.Jobs;
+using StickyBoard.Core.Services.Automation.Workers;
+using StickyBoard.Worker;
 
 // ==========================================================
-//  StickyBoard Worker Entry Point (Refactored)
+//  StickyBoard Worker Entry Point 
 // ==========================================================
 await Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((context, config) =>
@@ -46,8 +49,12 @@ await Host.CreateDefaultBuilder(args)
         // ==========================================================
         // REPOSITORIES & WORKERS
         // ==========================================================
-        // services.AddScoped<IXXXRepository, XXXRepository>();
-        // services.AddHostedService<WorkerLoop>();
+        services.AddScoped<IWorkerJobRepository, WorkerJobRepository>();
+        services.AddScoped<IWorkerJobAttemptRepository, WorkerJobAttemptRepository>();
+        services.AddScoped<WorkerQueueService>();
+
+        services.AddHostedService<WorkerLoop>();
+
     })
     .ConfigureLogging(logging =>
     {

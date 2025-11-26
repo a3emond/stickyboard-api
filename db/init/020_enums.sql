@@ -100,7 +100,8 @@ DO $$ BEGIN CREATE TYPE attachment_status AS ENUM (
   'processing',
   'ready',
   'failed',
-  'deleted'
+  'deleted',
+  'uploading'
 ); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 

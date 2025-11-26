@@ -177,6 +177,25 @@ public sealed class WorkerJobRepository : IWorkerJobRepository
 
         await cmd.ExecuteNonQueryAsync(ct);
     }
+    
+    // ------------------------------------------------------------
+    // TOUCH (heartbeat - extend running)
+    // ------------------------------------------------------------
+    
+    public async Task TouchAsync(long jobId, CancellationToken ct)
+    {
+        const string sql = """
+                               UPDATE worker_jobs
+                               SET updated_at = NOW()
+                               WHERE id = @id AND status = 'running';
+                           """;
+
+        await using var c = await Conn(ct);
+        await using var cmd = new NpgsqlCommand(sql, c);
+        cmd.Parameters.AddWithValue("id", jobId);
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
 
     private ValueTask<NpgsqlConnection> Conn(CancellationToken ct)
     {

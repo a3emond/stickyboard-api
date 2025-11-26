@@ -12,7 +12,7 @@ public sealed class FileToken : IEntity
 
     [Column("variant")] public string? Variant { get; set; }
 
-    [Column("secret")] public byte[] Secret { get; set; } = null!;
+    [Column("secret")] public byte[]? Secret { get; set; }
 
     [Column("audience")] public string Audience { get; set; } = "download";
 

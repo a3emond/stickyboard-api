@@ -210,7 +210,8 @@ public enum AttachmentStatus
     Processing,
     Ready,
     Failed,
-    Deleted
+    Deleted,
+    Uploading
 }
 
 public enum AttachmentVariantType
